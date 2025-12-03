@@ -131,8 +131,100 @@ app.get('/api/health', (req, res) => {
     status: 'OK', 
     timestamp: new Date().toISOString(),
     appointments: appointments.length,
-    inventory: inventory.length
+    inventory: inventory.length,
+    medicalRecords: medicalRecords.length
   });
+});
+
+// ============ MEDICAL RECORDS ENDPOINTS ============
+
+// Get all medical records
+app.get('/api/medical-records', (req, res) => {
+  res.json(medicalRecords);
+});
+
+// Create new medical record
+app.post('/api/medical-records', (req, res) => {
+  const { 
+    appointmentId, patientName, age, gender, diagnosis, symptoms, treatment, 
+    medications, allergies, bloodPressure, heartRate, temperature, 
+    notes, followUpDate, labResults, xrayNotes 
+  } = req.body;
+  
+  if (!patientName || !diagnosis || !symptoms || !treatment) {
+    return res.status(400).json({ error: 'Patient name, diagnosis, symptoms, and treatment are required' });
+  }
+
+  const newRecord = {
+    id: medicalRecordIdCounter++,
+    appointmentId: appointmentId || null,
+    patientName,
+    age: age || null,
+    gender: gender || null,
+    diagnosis,
+    symptoms,
+    treatment,
+    medications: medications || '',
+    allergies: allergies || '',
+    bloodPressure: bloodPressure || null,
+    heartRate: heartRate || null,
+    temperature: temperature || null,
+    notes: notes || '',
+    followUpDate: followUpDate || null,
+    labResults: labResults || '',
+    xrayNotes: xrayNotes || '',
+    createdAt: new Date().toISOString()
+  };
+
+  medicalRecords.push(newRecord);
+  res.status(201).json(newRecord);
+});
+
+// Get medical record by ID
+app.get('/api/medical-records/:id', (req, res) => {
+  const id = parseInt(req.params.id);
+  const record = medicalRecords.find(record => record.id === id);
+  
+  if (!record) {
+    return res.status(404).json({ error: 'Medical record not found' });
+  }
+
+  res.json(record);
+});
+
+// Update medical record
+app.put('/api/medical-records/:id', (req, res) => {
+  const id = parseInt(req.params.id);
+  const record = medicalRecords.find(record => record.id === id);
+  
+  if (!record) {
+    return res.status(404).json({ error: 'Medical record not found' });
+  }
+
+  const { patientName, diagnosis, symptoms, treatment, notes, followUpDate } = req.body;
+  
+  if (patientName) record.patientName = patientName;
+  if (diagnosis) record.diagnosis = diagnosis;
+  if (symptoms) record.symptoms = symptoms;
+  if (treatment) record.treatment = treatment;
+  if (notes !== undefined) record.notes = notes;
+  if (followUpDate !== undefined) record.followUpDate = followUpDate;
+  record.updatedAt = new Date().toISOString();
+  
+  res.json(record);
+});
+
+// Delete medical record
+app.delete('/api/medical-records/:id', (req, res) => {
+  const id = parseInt(req.params.id);
+  const index = medicalRecords.findIndex(record => record.id === id);
+  
+  if (index === -1) {
+    return res.status(404).json({ error: 'Medical record not found' });
+  }
+
+  medicalRecords.splice(index, 1);
+  res.json({ message: 'Medical record deleted successfully' });
 });
 
 // Start server

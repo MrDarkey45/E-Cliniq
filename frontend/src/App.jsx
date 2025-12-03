@@ -10,7 +10,7 @@ function App() {
   return (
     <div className="app">
       <header className="app-header">
-        <h1>📋 Medical Practice Management System</h1>
+        <h1>📋 E-Cliniq</h1>
         <p>Manage appointments, inventory, and patient records</p>
       </header>
 
