@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import { appointmentQueries, inventoryQueries, medicalRecordQueries, closeDatabase } from './database.js';
 
 dotenv.config();
 
@@ -11,19 +12,23 @@ const PORT = process.env.PORT || 3001;
 app.use(cors());
 app.use(express.json());
 
-// In-memory data storage (replace with database in production)
-let appointments = [];
-let inventory = [];
-let medicalRecords = [];
-let appointmentIdCounter = 1;
-let inventoryIdCounter = 1;
-let medicalRecordIdCounter = 1;
+// Graceful shutdown
+process.on('SIGINT', () => {
+  closeDatabase();
+  process.exit(0);
+});
 
 // ============ APPOINTMENT ENDPOINTS ============
 
 // Get all appointments
 app.get('/api/appointments', (req, res) => {
-  res.json(appointments);
+  try {
+    const appointments = appointmentQueries.getAll();
+    res.json(appointments);
+  } catch (err) {
+    console.error('Error fetching appointments:', err);
+    res.status(500).json({ error: 'Failed to fetch appointments' });
+  }
 });
 
 // Create new appointment
@@ -34,37 +39,42 @@ app.post('/api/appointments', (req, res) => {
     return res.status(400).json({ error: 'All fields are required' });
   }
 
-  const newAppointment = {
-    id: appointmentIdCounter++,
-    date,
-    time,
-    clientName,
-    service,
-    createdAt: new Date().toISOString()
-  };
-
-  appointments.push(newAppointment);
-  res.status(201).json(newAppointment);
+  try {
+    const newAppointment = appointmentQueries.create({ date, time, clientName, service });
+    res.status(201).json(newAppointment);
+  } catch (err) {
+    console.error('Error creating appointment:', err);
+    res.status(500).json({ error: 'Failed to create appointment' });
+  }
 });
 
 // Delete appointment
 app.delete('/api/appointments/:id', (req, res) => {
   const id = parseInt(req.params.id);
-  const index = appointments.findIndex(apt => apt.id === id);
   
-  if (index === -1) {
-    return res.status(404).json({ error: 'Appointment not found' });
+  try {
+    const result = appointmentQueries.delete(id);
+    if (result.changes === 0) {
+      return res.status(404).json({ error: 'Appointment not found' });
+    }
+    res.json({ message: 'Appointment deleted successfully' });
+  } catch (err) {
+    console.error('Error deleting appointment:', err);
+    res.status(500).json({ error: 'Failed to delete appointment' });
   }
-
-  appointments.splice(index, 1);
-  res.json({ message: 'Appointment deleted successfully' });
 });
 
 // ============ INVENTORY ENDPOINTS ============
 
 // Get all inventory items
 app.get('/api/inventory', (req, res) => {
-  res.json(inventory);
+  try {
+    const inventory = inventoryQueries.getAll();
+    res.json(inventory);
+  } catch (err) {
+    console.error('Error fetching inventory:', err);
+    res.status(500).json({ error: 'Failed to fetch inventory' });
+  }
 });
 
 // Add new inventory item
@@ -79,16 +89,17 @@ app.post('/api/inventory', (req, res) => {
     return res.status(400).json({ error: 'Quantity and price must be positive' });
   }
 
-  const newItem = {
-    id: inventoryIdCounter++,
-    name,
-    quantity: parseInt(quantity),
-    price: parseFloat(price),
-    createdAt: new Date().toISOString()
-  };
-
-  inventory.push(newItem);
-  res.status(201).json(newItem);
+  try {
+    const newItem = inventoryQueries.create({ 
+      name, 
+      quantity: parseInt(quantity), 
+      price: parseFloat(price) 
+    });
+    res.status(201).json(newItem);
+  } catch (err) {
+    console.error('Error creating inventory item:', err);
+    res.status(500).json({ error: 'Failed to create inventory item' });
+  }
 });
 
 // Update inventory item quantity
@@ -96,51 +107,51 @@ app.put('/api/inventory/:id', (req, res) => {
   const id = parseInt(req.params.id);
   const { quantity } = req.body;
   
-  const item = inventory.find(item => item.id === id);
-  
-  if (!item) {
-    return res.status(404).json({ error: 'Item not found' });
-  }
-
   if (quantity === undefined || quantity < 0) {
     return res.status(400).json({ error: 'Valid quantity is required' });
   }
 
-  item.quantity = parseInt(quantity);
-  item.updatedAt = new Date().toISOString();
-  
-  res.json(item);
+  try {
+    const item = inventoryQueries.getById(id);
+    if (!item) {
+      return res.status(404).json({ error: 'Item not found' });
+    }
+
+    const updatedItem = inventoryQueries.update(id, { quantity: parseInt(quantity) });
+    res.json(updatedItem);
+  } catch (err) {
+    console.error('Error updating inventory item:', err);
+    res.status(500).json({ error: 'Failed to update inventory item' });
+  }
 });
 
 // Delete inventory item
 app.delete('/api/inventory/:id', (req, res) => {
   const id = parseInt(req.params.id);
-  const index = inventory.findIndex(item => item.id === id);
   
-  if (index === -1) {
-    return res.status(404).json({ error: 'Item not found' });
+  try {
+    const result = inventoryQueries.delete(id);
+    if (result.changes === 0) {
+      return res.status(404).json({ error: 'Item not found' });
+    }
+    res.json({ message: 'Item deleted successfully' });
+  } catch (err) {
+    console.error('Error deleting inventory item:', err);
+    res.status(500).json({ error: 'Failed to delete inventory item' });
   }
-
-  inventory.splice(index, 1);
-  res.json({ message: 'Item deleted successfully' });
-});
-
-// Health check endpoint
-app.get('/api/health', (req, res) => {
-  res.json({ 
-    status: 'OK', 
-    timestamp: new Date().toISOString(),
-    appointments: appointments.length,
-    inventory: inventory.length,
-    medicalRecords: medicalRecords.length
-  });
 });
 
 // ============ MEDICAL RECORDS ENDPOINTS ============
 
 // Get all medical records
 app.get('/api/medical-records', (req, res) => {
-  res.json(medicalRecords);
+  try {
+    const records = medicalRecordQueries.getAll();
+    res.json(records);
+  } catch (err) {
+    console.error('Error fetching medical records:', err);
+    res.status(500).json({ error: 'Failed to fetch medical records' });
+  }
 });
 
 // Create new medical record
@@ -155,76 +166,101 @@ app.post('/api/medical-records', (req, res) => {
     return res.status(400).json({ error: 'Patient name, diagnosis, symptoms, and treatment are required' });
   }
 
-  const newRecord = {
-    id: medicalRecordIdCounter++,
-    appointmentId: appointmentId || null,
-    patientName,
-    age: age || null,
-    gender: gender || null,
-    diagnosis,
-    symptoms,
-    treatment,
-    medications: medications || '',
-    allergies: allergies || '',
-    bloodPressure: bloodPressure || null,
-    heartRate: heartRate || null,
-    temperature: temperature || null,
-    notes: notes || '',
-    followUpDate: followUpDate || null,
-    labResults: labResults || '',
-    xrayNotes: xrayNotes || '',
-    createdAt: new Date().toISOString()
-  };
-
-  medicalRecords.push(newRecord);
-  res.status(201).json(newRecord);
+  try {
+    const newRecord = medicalRecordQueries.create({
+      appointmentId, patientName, age, gender, diagnosis, symptoms, treatment,
+      medications, allergies, bloodPressure, heartRate, temperature,
+      notes, followUpDate, labResults, xrayNotes
+    });
+    res.status(201).json(newRecord);
+  } catch (err) {
+    console.error('Error creating medical record:', err);
+    res.status(500).json({ error: 'Failed to create medical record' });
+  }
 });
 
 // Get medical record by ID
 app.get('/api/medical-records/:id', (req, res) => {
   const id = parseInt(req.params.id);
-  const record = medicalRecords.find(record => record.id === id);
   
-  if (!record) {
-    return res.status(404).json({ error: 'Medical record not found' });
+  try {
+    const record = medicalRecordQueries.getById(id);
+    if (!record) {
+      return res.status(404).json({ error: 'Medical record not found' });
+    }
+    res.json(record);
+  } catch (err) {
+    console.error('Error fetching medical record:', err);
+    res.status(500).json({ error: 'Failed to fetch medical record' });
   }
-
-  res.json(record);
 });
 
 // Update medical record
 app.put('/api/medical-records/:id', (req, res) => {
   const id = parseInt(req.params.id);
-  const record = medicalRecords.find(record => record.id === id);
+  const data = req.body;
   
-  if (!record) {
-    return res.status(404).json({ error: 'Medical record not found' });
-  }
+  try {
+    const record = medicalRecordQueries.getById(id);
+    if (!record) {
+      return res.status(404).json({ error: 'Medical record not found' });
+    }
 
-  const { patientName, diagnosis, symptoms, treatment, notes, followUpDate } = req.body;
-  
-  if (patientName) record.patientName = patientName;
-  if (diagnosis) record.diagnosis = diagnosis;
-  if (symptoms) record.symptoms = symptoms;
-  if (treatment) record.treatment = treatment;
-  if (notes !== undefined) record.notes = notes;
-  if (followUpDate !== undefined) record.followUpDate = followUpDate;
-  record.updatedAt = new Date().toISOString();
-  
-  res.json(record);
+    const updatedRecord = medicalRecordQueries.update(id, data);
+    res.json(updatedRecord);
+  } catch (err) {
+    console.error('Error updating medical record:', err);
+    res.status(500).json({ error: 'Failed to update medical record' });
+  }
 });
 
 // Delete medical record
 app.delete('/api/medical-records/:id', (req, res) => {
   const id = parseInt(req.params.id);
-  const index = medicalRecords.findIndex(record => record.id === id);
   
-  if (index === -1) {
-    return res.status(404).json({ error: 'Medical record not found' });
+  try {
+    const result = medicalRecordQueries.delete(id);
+    if (result.changes === 0) {
+      return res.status(404).json({ error: 'Medical record not found' });
+    }
+    res.json({ message: 'Medical record deleted successfully' });
+  } catch (err) {
+    console.error('Error deleting medical record:', err);
+    res.status(500).json({ error: 'Failed to delete medical record' });
   }
+});
 
-  medicalRecords.splice(index, 1);
-  res.json({ message: 'Medical record deleted successfully' });
+// Search medical records by patient name
+app.get('/api/medical-records/search/:name', (req, res) => {
+  const name = req.params.name;
+  
+  try {
+    const records = medicalRecordQueries.getByPatientName(name);
+    res.json(records);
+  } catch (err) {
+    console.error('Error searching medical records:', err);
+    res.status(500).json({ error: 'Failed to search medical records' });
+  }
+});
+
+// Health check endpoint
+app.get('/api/health', (req, res) => {
+  try {
+    const appointments = appointmentQueries.getAll();
+    const inventory = inventoryQueries.getAll();
+    const medicalRecords = medicalRecordQueries.getAll();
+    
+    res.json({ 
+      status: 'OK', 
+      timestamp: new Date().toISOString(),
+      database: 'SQLite',
+      appointments: appointments.length,
+      inventory: inventory.length,
+      medicalRecords: medicalRecords.length
+    });
+  } catch (err) {
+    res.status(500).json({ status: 'ERROR', error: err.message });
+  }
 });
 
 // Start server
@@ -232,4 +268,6 @@ app.listen(PORT, () => {
   console.log(`🚀 Server running on http://localhost:${PORT}`);
   console.log(`📅 Appointments API: http://localhost:${PORT}/api/appointments`);
   console.log(`📦 Inventory API: http://localhost:${PORT}/api/inventory`);
+  console.log(`🏥 Medical Records API: http://localhost:${PORT}/api/medical-records`);
+  console.log(`💾 Database: SQLite (medical-practice.db)`);
 });
