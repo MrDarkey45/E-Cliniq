@@ -4,13 +4,19 @@ const API_URL = 'http://localhost:3001/api';
 
 function InventoryManager() {
   const [inventory, setInventory] = useState([]);
+  const [showModal, setShowModal] = useState(false);
+  const [editMode, setEditMode] = useState(false);
+  const [currentItem, setCurrentItem] = useState(null);
   const [formData, setFormData] = useState({
     name: '',
+    dosage: '',
+    unit: 'mg',
     quantity: '',
     price: ''
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
     fetchInventory();
@@ -27,23 +33,72 @@ function InventoryManager() {
     }
   };
 
+  const resetForm = () => {
+    setFormData({
+      name: '',
+      dosage: '',
+      unit: 'mg',
+      quantity: '',
+      price: ''
+    });
+    setEditMode(false);
+    setCurrentItem(null);
+  };
+
+  const openCreateModal = () => {
+    resetForm();
+    setShowModal(true);
+  };
+
+  const openEditModal = (item) => {
+    setFormData({
+      name: item.name,
+      dosage: item.dosage || '',
+      unit: item.unit || 'mg',
+      quantity: item.quantity,
+      price: item.price
+    });
+    setCurrentItem(item);
+    setEditMode(true);
+    setShowModal(true);
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError('');
 
     try {
-      const response = await fetch(`${API_URL}/inventory`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData)
-      });
+      if (editMode) {
+        // Update existing item
+        const response = await fetch(`${API_URL}/inventory/${currentItem.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(formData)
+        });
 
-      if (!response.ok) throw new Error('Failed to add item');
+        if (!response.ok) throw new Error('Failed to update item');
 
-      const newItem = await response.json();
-      setInventory([...inventory, newItem]);
-      setFormData({ name: '', quantity: '', price: '' });
+        const updatedItem = await response.json();
+        setInventory(inventory.map(item => 
+          item.id === currentItem.id ? updatedItem : item
+        ));
+      } else {
+        // Create new item
+        const response = await fetch(`${API_URL}/inventory`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(formData)
+        });
+
+        if (!response.ok) throw new Error('Failed to add item');
+
+        const newItem = await response.json();
+        setInventory([...inventory, newItem]);
+      }
+
+      setShowModal(false);
+      resetForm();
     } catch (err) {
       setError(err.message);
     } finally {
@@ -51,7 +106,23 @@ function InventoryManager() {
     }
   };
 
-  const handleUpdateQuantity = async (id, newQuantity) => {
+  const handleDelete = async (id) => {
+    if (!window.confirm('Delete this medicine? This action cannot be undone.')) return;
+
+    try {
+      const response = await fetch(`${API_URL}/inventory/${id}`, {
+        method: 'DELETE'
+      });
+
+      if (!response.ok) throw new Error('Failed to delete item');
+
+      setInventory(inventory.filter(item => item.id !== id));
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  const handleQuickUpdate = async (id, newQuantity) => {
     try {
       const response = await fetch(`${API_URL}/inventory/${id}`, {
         method: 'PUT',
@@ -70,22 +141,6 @@ function InventoryManager() {
     }
   };
 
-  const handleDelete = async (id) => {
-    if (!window.confirm('Delete this item?')) return;
-
-    try {
-      const response = await fetch(`${API_URL}/inventory/${id}`, {
-        method: 'DELETE'
-      });
-
-      if (!response.ok) throw new Error('Failed to delete item');
-
-      setInventory(inventory.filter(item => item.id !== id));
-    } catch (err) {
-      setError(err.message);
-    }
-  };
-
   const handleChange = (e) => {
     setFormData({
       ...formData,
@@ -93,26 +148,44 @@ function InventoryManager() {
     });
   };
 
+  const filteredInventory = inventory.filter(item =>
+    item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (item.dosage && item.dosage.toLowerCase().includes(searchTerm.toLowerCase())) ||
+    (item.unit && item.unit.toLowerCase().includes(searchTerm.toLowerCase()))
+  );
+
   const totalValue = inventory.reduce(
     (sum, item) => sum + (item.quantity * item.price), 
     0
   );
 
+  const lowStockCount = inventory.filter(item => item.quantity < 10).length;
+
   return (
     <div className="inventory-container">
-      <h2>📦 Inventory Manager</h2>
-
       {error && <div className="error-message">{error}</div>}
+
+      <div className="inventory-header">
+        <button onClick={openCreateModal} className="create-btn">
+          + Add Medicine
+        </button>
+      </div>
 
       <div className="inventory-stats">
         <div className="stat-card">
-          <h4>Total Items</h4>
+          <h4>Total Medicines</h4>
           <p className="stat-value">{inventory.length}</p>
         </div>
         <div className="stat-card">
-          <h4>Total Units</h4>
+          <h4>Total Stock</h4>
           <p className="stat-value">
             {inventory.reduce((sum, item) => sum + item.quantity, 0)}
+          </p>
+        </div>
+        <div className="stat-card">
+          <h4>Low Stock Alert</h4>
+          <p className="stat-value" style={{ color: lowStockCount > 0 ? '#dc3545' : '#28a745' }}>
+            {lowStockCount}
           </p>
         </div>
         <div className="stat-card">
@@ -121,99 +194,84 @@ function InventoryManager() {
         </div>
       </div>
 
-      <form onSubmit={handleSubmit} className="inventory-form">
-        <div className="form-group">
-          <label>Item Name:</label>
-          <input
-            type="text"
-            name="name"
-            value={formData.name}
-            onChange={handleChange}
-            placeholder="Product name"
-            required
-          />
-        </div>
+      <div className="search-bar">
+        <input
+          type="text"
+          placeholder="🔍 Search by medicine name or dosage..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="search-input"
+        />
+      </div>
 
-        <div className="form-group">
-          <label>Quantity:</label>
-          <input
-            type="number"
-            name="quantity"
-            value={formData.quantity}
-            onChange={handleChange}
-            placeholder="0"
-            min="0"
-            required
-          />
-        </div>
-
-        <div className="form-group">
-          <label>Price ($):</label>
-          <input
-            type="number"
-            name="price"
-            value={formData.price}
-            onChange={handleChange}
-            placeholder="0.00"
-            step="0.01"
-            min="0"
-            required
-          />
-        </div>
-
-        <button type="submit" disabled={loading} className="submit-btn">
-          {loading ? 'Adding...' : 'Add Item'}
-        </button>
-      </form>
-
-      <div className="inventory-list">
-        <h3>Current Inventory</h3>
-        {inventory.length === 0 ? (
-          <p className="empty-state">No items in inventory yet</p>
+      <div className="inventory-table-container">
+        {filteredInventory.length === 0 ? (
+          <div className="empty-state-large">
+            <div className="empty-icon">💊</div>
+            <h3>No medicines in inventory</h3>
+            <p>Click "Add Medicine" to add your first medicine</p>
+          </div>
         ) : (
           <table className="inventory-table">
             <thead>
               <tr>
-                <th>Item Name</th>
-                <th>Quantity</th>
-                <th>Price</th>
+                <th>Medicine Name</th>
+                <th>Dosage</th>
+                <th>Quantity in Stock</th>
+                <th>Price per Unit</th>
                 <th>Total Value</th>
                 <th>Actions</th>
               </tr>
             </thead>
             <tbody>
-              {inventory.map((item) => (
-                <tr key={item.id}>
-                  <td className="item-name">{item.name}</td>
+              {filteredInventory.map((item) => (
+                <tr key={item.id} className={item.quantity < 10 ? 'low-stock-row' : ''}>
+                  <td className="medicine-name">
+                    {item.name}
+                    {item.quantity < 10 && <span className="low-stock-badge">Low Stock</span>}
+                  </td>
+                  <td className="dosage-cell">
+                    {item.dosage ? `${item.dosage} ${item.unit || 'mg'}` : 'N/A'}
+                  </td>
                   <td>
                     <div className="quantity-controls">
                       <button
-                        onClick={() => handleUpdateQuantity(item.id, item.quantity - 1)}
-                        disabled={item.quantity === 0}
+                        onClick={() => handleQuickUpdate(item.id, Math.max(0, item.quantity - 1))}
                         className="qty-btn"
+                        disabled={item.quantity === 0}
                       >
                         -
                       </button>
                       <span className="quantity">{item.quantity}</span>
                       <button
-                        onClick={() => handleUpdateQuantity(item.id, item.quantity + 1)}
+                        onClick={() => handleQuickUpdate(item.id, item.quantity + 1)}
                         className="qty-btn"
                       >
                         +
                       </button>
                     </div>
                   </td>
-                  <td>${item.price.toFixed(2)}</td>
+                  <td className="price-cell">${item.price.toFixed(2)}</td>
                   <td className="total-value">
                     ${(item.quantity * item.price).toFixed(2)}
                   </td>
                   <td>
-                    <button
-                      onClick={() => handleDelete(item.id)}
-                      className="delete-btn"
-                    >
-                      Delete
-                    </button>
+                    <div className="action-buttons">
+                      <button
+                        onClick={() => openEditModal(item)}
+                        className="edit-btn"
+                        title="Edit medicine"
+                      >
+                        ✏️
+                      </button>
+                      <button
+                        onClick={() => handleDelete(item.id)}
+                        className="delete-btn-icon"
+                        title="Delete medicine"
+                      >
+                        🗑️
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -221,6 +279,105 @@ function InventoryManager() {
           </table>
         )}
       </div>
+
+      {/* Add/Edit Modal */}
+      {showModal && (
+        <div className="modal-overlay" onClick={() => setShowModal(false)}>
+          <div className="modal-container" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>{editMode ? '✏️ Edit Medicine' : '➕ Add New Medicine'}</h2>
+              <button onClick={() => setShowModal(false)} className="modal-close-btn">✕</button>
+            </div>
+
+            <form onSubmit={handleSubmit} className="modal-form">
+              <div className="tab-content">
+                <div className="form-row">
+                  <div className="form-group-modal">
+                    <label>Medicine Name *</label>
+                    <input
+                      type="text"
+                      name="name"
+                      value={formData.name}
+                      onChange={handleChange}
+                      placeholder="e.g., Aspirin"
+                      required
+                    />
+                  </div>
+
+                  <div className="form-group-modal">
+                    <label>Dosage *</label>
+                    <div className="dosage-input-group">
+                      <input
+                        type="number"
+                        name="dosage"
+                        value={formData.dosage}
+                        onChange={handleChange}
+                        placeholder="500"
+                        min="0"
+                        step="0.1"
+                        required
+                        className="dosage-number-input"
+                      />
+                      <select
+                        name="unit"
+                        value={formData.unit}
+                        onChange={handleChange}
+                        className="unit-select"
+                      >
+                        <option value="mg">mg</option>
+                        <option value="ml">ml</option>
+                      </select>
+                    </div>
+                    <small className="field-hint">Enter dosage value and select unit (milligrams or milliliters)</small>
+                  </div>
+                </div>
+
+                <div className="form-row">
+                  <div className="form-group-modal">
+                    <label>Quantity in Stock *</label>
+                    <input
+                      type="number"
+                      name="quantity"
+                      value={formData.quantity}
+                      onChange={handleChange}
+                      placeholder="0"
+                      min="0"
+                      required
+                    />
+                  </div>
+
+                  <div className="form-group-modal">
+                    <label>Price per Unit ($) *</label>
+                    <input
+                      type="number"
+                      name="price"
+                      value={formData.price}
+                      onChange={handleChange}
+                      placeholder="0.00"
+                      step="0.01"
+                      min="0"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="info-box">
+                  <strong>💡 Tip:</strong> Enter the numeric dosage value and select the appropriate unit. Use "mg" for tablets/capsules and "ml" for liquid medicines.
+                </div>
+              </div>
+
+              <div className="modal-footer">
+                <button type="button" onClick={() => setShowModal(false)} className="cancel-btn">
+                  Cancel
+                </button>
+                <button type="submit" disabled={loading} className="submit-btn-modal">
+                  {loading ? 'Saving...' : editMode ? '✓ Update Medicine' : '✓ Add Medicine'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
