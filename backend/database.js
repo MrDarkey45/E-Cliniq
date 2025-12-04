@@ -30,6 +30,7 @@ const createTables = () => {
     CREATE TABLE IF NOT EXISTS inventory (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
+      dosage TEXT,
       quantity INTEGER NOT NULL,
       price REAL NOT NULL,
       createdAt TEXT NOT NULL,
@@ -114,11 +115,13 @@ export const inventoryQueries = {
 
   create: (data) => {
     const stmt = db.prepare(`
-      INSERT INTO inventory (name, quantity, price, createdAt)
-      VALUES (?, ?, ?, ?)
+      INSERT INTO inventory (name, dosage, unit, quantity, price, createdAt)
+      VALUES (?, ?, ?, ?, ?, ?)
     `);
     const result = stmt.run(
       data.name,
+      data.dosage || '',
+      data.unit || 'mg',
       data.quantity,
       data.price,
       new Date().toISOString()
@@ -127,12 +130,31 @@ export const inventoryQueries = {
   },
 
   update: (id, data) => {
-    const stmt = db.prepare(`
-      UPDATE inventory
-      SET quantity = ?, updatedAt = ?
-      WHERE id = ?
-    `);
-    stmt.run(data.quantity, new Date().toISOString(), id);
+    // If only quantity is being updated (quick update)
+    if (data.quantity !== undefined && Object.keys(data).length === 1) {
+      const stmt = db.prepare(`
+        UPDATE inventory
+        SET quantity = ?, updatedAt = ?
+        WHERE id = ?
+      `);
+      stmt.run(data.quantity, new Date().toISOString(), id);
+    } else {
+      // Full update
+      const stmt = db.prepare(`
+        UPDATE inventory
+        SET name = ?, dosage = ?, unit = ?, quantity = ?, price = ?, updatedAt = ?
+        WHERE id = ?
+      `);
+      stmt.run(
+        data.name,
+        data.dosage || '',
+        data.unit || 'mg',
+        data.quantity,
+        data.price,
+        new Date().toISOString(),
+        id
+      );
+    }
     return inventoryQueries.getById(id);
   },
 
