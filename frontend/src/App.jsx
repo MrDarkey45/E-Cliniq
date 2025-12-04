@@ -6,44 +6,81 @@ import './App.css';
 
 function App() {
   const [activeTab, setActiveTab] = useState('appointments');
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   return (
-    <div className="app">
-      <header className="app-header">
-        <h1>📋 E-Cliniq</h1>
-        <p>Manage appointments, inventory, and patient records</p>
-      </header>
+    <div className="app-layout">
+      <aside className={`sidebar ${sidebarCollapsed ? 'collapsed' : ''}`}>
+        <div className="sidebar-header">
+          <div className="logo">
+            {!sidebarCollapsed && <h2>E-Cliniq</h2>}
+            {!sidebarCollapsed && <p>Medical System</p>}
+          </div>
+          <button 
+            className="toggle-btn" 
+            onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+            title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+          >
+            {sidebarCollapsed ? '→' : '←'}
+          </button>
+        </div>
 
-      <nav className="tab-navigation">
-        <button
-          className={activeTab === 'appointments' ? 'active' : ''}
-          onClick={() => setActiveTab('appointments')}
-        >
-          📅 Appointments
-        </button>
-        <button
-          className={activeTab === 'medical' ? 'active' : ''}
-          onClick={() => setActiveTab('medical')}
-        >
-          🏥 Medical Records
-        </button>
-        <button
-          className={activeTab === 'inventory' ? 'active' : ''}
-          onClick={() => setActiveTab('inventory')}
-        >
-          📦 Inventory
-        </button>
-      </nav>
+        <nav className="sidebar-nav">
+          <button
+            className={`nav-item ${activeTab === 'appointments' ? 'active' : ''}`}
+            onClick={() => setActiveTab('appointments')}
+          >
+            <span className="nav-icon">📅</span>
+            {!sidebarCollapsed && <span className="nav-text">Appointments</span>}
+          </button>
 
-      <main className="app-content">
-        {activeTab === 'appointments' && <AppointmentScheduler />}
-        {activeTab === 'medical' && <MedicalRecords />}
-        {activeTab === 'inventory' && <InventoryManager />}
+          <button
+            className={`nav-item ${activeTab === 'medical' ? 'active' : ''}`}
+            onClick={() => setActiveTab('medical')}
+          >
+            <span className="nav-icon">🏥</span>
+            {!sidebarCollapsed && <span className="nav-text">Medical Records</span>}
+          </button>
+
+          <button
+            className={`nav-item ${activeTab === 'inventory' ? 'active' : ''}`}
+            onClick={() => setActiveTab('inventory')}
+          >
+            <span className="nav-icon">💊</span>
+            {!sidebarCollapsed && <span className="nav-text">Inventory</span>}
+          </button>
+        </nav>
+
+        {!sidebarCollapsed && (
+          <div className="sidebar-footer">
+            <p>Version 1.0</p>
+            <p>© 2024 E-Cliniq</p>
+          </div>
+        )}
+      </aside>
+
+      <main className="main-content">
+        <header className="main-header">
+          <div className="header-content">
+            <h1>
+              {activeTab === 'appointments' && '📅 Appointments'}
+              {activeTab === 'medical' && '🏥 Medical Records'}
+              {activeTab === 'inventory' && '💊 Medicine Inventory'}
+            </h1>
+            <p className="header-subtitle">
+              {activeTab === 'appointments' && 'Schedule and manage patient appointments'}
+              {activeTab === 'medical' && 'Patient medical history and records'}
+              {activeTab === 'inventory' && 'Manage medicine stock and dosages'}
+            </p>
+          </div>
+        </header>
+
+        <div className="content-wrapper">
+          {activeTab === 'appointments' && <AppointmentScheduler />}
+          {activeTab === 'medical' && <MedicalRecords />}
+          {activeTab === 'inventory' && <InventoryManager />}
+        </div>
       </main>
-
-      <footer className="app-footer">
-        <p>Built with React, Node.js, and Express</p>
-      </footer>
     </div>
   );
 }

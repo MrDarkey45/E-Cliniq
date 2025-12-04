@@ -79,7 +79,9 @@ app.get('/api/inventory', (req, res) => {
 
 // Add new inventory item
 app.post('/api/inventory', (req, res) => {
-  const { name, quantity, price } = req.body;
+  const { name, dosage, unit, quantity, price } = req.body;
+  
+  console.log('Received inventory data:', { name, dosage, unit, quantity, price });
   
   if (!name || quantity === undefined || price === undefined) {
     return res.status(400).json({ error: 'Name, quantity, and price are required' });
@@ -92,9 +94,12 @@ app.post('/api/inventory', (req, res) => {
   try {
     const newItem = inventoryQueries.create({ 
       name, 
+      dosage: dosage || '',
+      unit: unit || 'mg',
       quantity: parseInt(quantity), 
       price: parseFloat(price) 
     });
+    console.log('Created item:', newItem);
     res.status(201).json(newItem);
   } catch (err) {
     console.error('Error creating inventory item:', err);
@@ -105,20 +110,35 @@ app.post('/api/inventory', (req, res) => {
 // Update inventory item quantity
 app.put('/api/inventory/:id', (req, res) => {
   const id = parseInt(req.params.id);
-  const { quantity } = req.body;
+  const { name, dosage, unit, quantity, price } = req.body;
   
-  if (quantity === undefined || quantity < 0) {
-    return res.status(400).json({ error: 'Valid quantity is required' });
-  }
-
   try {
     const item = inventoryQueries.getById(id);
     if (!item) {
       return res.status(404).json({ error: 'Item not found' });
     }
 
-    const updatedItem = inventoryQueries.update(id, { quantity: parseInt(quantity) });
-    res.json(updatedItem);
+    // Check if it's a full update or just quantity
+    if (name || dosage !== undefined || unit !== undefined || price !== undefined) {
+      // Full update
+      const updatedItem = inventoryQueries.update(id, {
+        name: name || item.name,
+        dosage: dosage !== undefined ? dosage : item.dosage,
+        unit: unit !== undefined ? unit : (item.unit || 'mg'),
+        quantity: quantity !== undefined ? parseInt(quantity) : item.quantity,
+        price: price !== undefined ? parseFloat(price) : item.price
+      });
+      res.json(updatedItem);
+    } else if (quantity !== undefined) {
+      // Quick quantity update
+      if (quantity < 0) {
+        return res.status(400).json({ error: 'Quantity must be positive' });
+      }
+      const updatedItem = inventoryQueries.update(id, { quantity: parseInt(quantity) });
+      res.json(updatedItem);
+    } else {
+      return res.status(400).json({ error: 'No fields to update' });
+    }
   } catch (err) {
     console.error('Error updating inventory item:', err);
     res.status(500).json({ error: 'Failed to update inventory item' });
