@@ -11,8 +11,7 @@ function InventoryManager() {
     name: '',
     dosage: '',
     unit: 'mg',
-    quantity: '',
-    price: ''
+    quantity: ''
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -38,8 +37,7 @@ function InventoryManager() {
       name: '',
       dosage: '',
       unit: 'mg',
-      quantity: '',
-      price: ''
+      quantity: ''
     });
     setEditMode(false);
     setCurrentItem(null);
@@ -55,8 +53,7 @@ function InventoryManager() {
       name: item.name,
       dosage: item.dosage || '',
       unit: item.unit || 'mg',
-      quantity: item.quantity,
-      price: item.price
+      quantity: item.quantity
     });
     setCurrentItem(item);
     setEditMode(true);
@@ -154,11 +151,6 @@ function InventoryManager() {
     (item.unit && item.unit.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
-  const totalValue = inventory.reduce(
-    (sum, item) => sum + (item.quantity * item.price), 
-    0
-  );
-
   const lowStockCount = inventory.filter(item => item.quantity < 10).length;
 
   return (
@@ -188,10 +180,6 @@ function InventoryManager() {
             {lowStockCount}
           </p>
         </div>
-        <div className="stat-card">
-          <h4>Total Value</h4>
-          <p className="stat-value">${totalValue.toFixed(2)}</p>
-        </div>
       </div>
 
       <div className="search-bar">
@@ -218,8 +206,6 @@ function InventoryManager() {
                 <th>Medicine Name</th>
                 <th>Dosage</th>
                 <th>Quantity in Stock</th>
-                <th>Price per Unit</th>
-                <th>Total Value</th>
                 <th>Actions</th>
               </tr>
             </thead>
@@ -250,10 +236,6 @@ function InventoryManager() {
                         +
                       </button>
                     </div>
-                  </td>
-                  <td className="price-cell">${item.price.toFixed(2)}</td>
-                  <td className="total-value">
-                    ${(item.quantity * item.price).toFixed(2)}
                   </td>
                   <td>
                     <div className="action-buttons">
@@ -341,20 +323,6 @@ function InventoryManager() {
                       value={formData.quantity}
                       onChange={handleChange}
                       placeholder="0"
-                      min="0"
-                      required
-                    />
-                  </div>
-
-                  <div className="form-group-modal">
-                    <label>Price per Unit ($) *</label>
-                    <input
-                      type="number"
-                      name="price"
-                      value={formData.price}
-                      onChange={handleChange}
-                      placeholder="0.00"
-                      step="0.01"
                       min="0"
                       required
                     />

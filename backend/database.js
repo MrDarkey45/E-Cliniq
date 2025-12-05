@@ -44,12 +44,15 @@ const createTables = () => {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       appointmentId INTEGER,
       patientName TEXT NOT NULL,
+      email TEXT,
+      idNumber TEXT,
       age INTEGER,
       gender TEXT,
       symptoms TEXT NOT NULL,
       diagnosis TEXT NOT NULL,
       treatment TEXT NOT NULL,
       medications TEXT,
+      prescribedMedicines TEXT,
       allergies TEXT,
       bloodPressure TEXT,
       heartRate TEXT,
@@ -183,21 +186,24 @@ export const medicalRecordQueries = {
   create: (data) => {
     const stmt = db.prepare(`
       INSERT INTO medical_records (
-        appointmentId, patientName, age, gender, symptoms, diagnosis, treatment,
-        medications, allergies, bloodPressure, heartRate, temperature,
+        appointmentId, patientName, email, idNumber, age, gender, symptoms, diagnosis, treatment,
+        medications, prescribedMedicines, allergies, bloodPressure, heartRate, temperature,
         notes, followUpDate, labResults, xrayNotes, createdAt
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     const result = stmt.run(
       data.appointmentId || null,
       data.patientName,
+      data.email || null,
+      data.idNumber || null,
       data.age || null,
       data.gender || null,
       data.symptoms,
       data.diagnosis,
       data.treatment,
       data.medications || '',
+      data.prescribedMedicines || '',
       data.allergies || '',
       data.bloodPressure || null,
       data.heartRate || null,
@@ -214,20 +220,23 @@ export const medicalRecordQueries = {
   update: (id, data) => {
     const stmt = db.prepare(`
       UPDATE medical_records
-      SET patientName = ?, age = ?, gender = ?, symptoms = ?, diagnosis = ?, 
-          treatment = ?, medications = ?, allergies = ?, bloodPressure = ?, 
+      SET patientName = ?, email = ?, idNumber = ?, age = ?, gender = ?, symptoms = ?, diagnosis = ?, 
+          treatment = ?, medications = ?, prescribedMedicines = ?, allergies = ?, bloodPressure = ?, 
           heartRate = ?, temperature = ?, notes = ?, followUpDate = ?, 
           labResults = ?, xrayNotes = ?, updatedAt = ?
       WHERE id = ?
     `);
     stmt.run(
       data.patientName,
+      data.email || null,
+      data.idNumber || null,
       data.age || null,
       data.gender || null,
       data.symptoms,
       data.diagnosis,
       data.treatment,
       data.medications || '',
+      data.prescribedMedicines || '',
       data.allergies || '',
       data.bloodPressure || null,
       data.heartRate || null,
