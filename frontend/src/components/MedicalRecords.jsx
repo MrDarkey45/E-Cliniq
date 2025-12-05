@@ -118,9 +118,30 @@ function MedicalRecords() {
       if (!response.ok) throw new Error('Failed to create medical record');
 
       const newRecord = await response.json();
+      
+      // Deduct prescribed medicines from inventory
+      for (const med of formData.prescribedMedicines) {
+        try {
+          const inventoryItem = inventory.find(item => item.id === med.id);
+          if (inventoryItem) {
+            const newQuantity = inventoryItem.quantity - med.quantity;
+            await fetch(`${API_URL}/inventory/${med.id}`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ quantity: Math.max(0, newQuantity) })
+            });
+          }
+        } catch (err) {
+          console.error(`Failed to update inventory for ${med.name}:`, err);
+        }
+      }
+      
       setRecords([...records, newRecord]);
       setShowModal(false);
       resetForm();
+      
+      // Refresh inventory to show updated quantities
+      fetchInventory();
     } catch (err) {
       setError(err.message);
     } finally {
@@ -310,10 +331,12 @@ function MedicalRecords() {
                   <td className="age-cell">{record.age || '—'}</td>
                   <td className="gender-cell">{record.gender || '—'}</td>
                   <td className="diagnosis-cell">
-                    <span className="diagnosis-icon">
-                      {record.diagnosis ? '📋' : '📄'}
-                    </span>
-                    <span className="diagnosis-text">{record.diagnosis}</span>
+                    <div className="diagnosis-content">
+                      <span className="diagnosis-icon">
+                        {record.diagnosis ? '📋' : '📄'}
+                      </span>
+                      <span className="diagnosis-text">{record.diagnosis}</span>
+                    </div>
                   </td>
                   <td className="followup-cell">
                     {record.followUpDate ? (
