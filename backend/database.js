@@ -20,6 +20,8 @@ const createTables = () => {
       date TEXT NOT NULL,
       time TEXT NOT NULL,
       clientName TEXT NOT NULL,
+      email TEXT,
+      idNumber TEXT,
       service TEXT NOT NULL,
       createdAt TEXT NOT NULL
     )
@@ -86,13 +88,15 @@ export const appointmentQueries = {
 
   create: (data) => {
     const stmt = db.prepare(`
-      INSERT INTO appointments (date, time, clientName, service, createdAt)
-      VALUES (?, ?, ?, ?, ?)
+      INSERT INTO appointments (date, time, clientName, email, idNumber, service, createdAt)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
     `);
     const result = stmt.run(
       data.date,
       data.time,
       data.clientName,
+      data.email || null,
+      data.idNumber || null,
       data.service,
       new Date().toISOString()
     );

@@ -168,63 +168,22 @@ body {
 
 /* ============ APPOINTMENTS STYLES ============ */
 
-.scheduler-container {
-  max-width: 100%;
-}
-
-.scheduler-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 25px;
-}
-
-.scheduler-header h2 {
+.scheduler-container h2,
+.inventory-container h2 {
   color: #333;
-  font-size: 1.8rem;
-  margin: 0;
-}
-
-.today-btn {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  border: none;
-  padding: 10px 20px;
-  border-radius: 8px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: transform 0.2s;
-}
-
-.today-btn:hover {
-  transform: translateY(-2px);
-}
-
-.scheduler-layout {
-  display: grid;
-  grid-template-columns: 350px 1fr;
-  gap: 30px;
-}
-
-.form-section {
-  background: white;
-  padding: 25px;
-  border-radius: 12px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
-  height: fit-content;
-}
-
-.form-section h3 {
-  color: #555;
   margin-bottom: 20px;
-  font-size: 1.2rem;
+  font-size: 1.8rem;
 }
 
 .appointment-form {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   gap: 15px;
-  margin-bottom: 20px;
+  margin-bottom: 30px;
+  padding: 25px;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
 }
 
 .form-group {
@@ -252,6 +211,7 @@ body {
 }
 
 .submit-btn {
+  grid-column: 1 / -1;
   padding: 12px;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
@@ -275,216 +235,87 @@ body {
   transform: none;
 }
 
-.appointments-summary {
-  padding: 15px;
-  background: #f8f9fa;
-  border-radius: 8px;
-  text-align: center;
+.appointments-list h3 {
+  margin-bottom: 20px;
+  color: #555;
 }
 
-.appointments-summary h4 {
-  color: #667eea;
-  margin: 0;
-  font-size: 1rem;
+.appointments-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 20px;
 }
 
-/* Calendar Styles */
-.calendar-section {
-  background: white;
-  padding: 25px;
+.appointment-card {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 20px;
   border-radius: 12px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  transition: transform 0.2s;
 }
 
-.calendar-header {
+.appointment-card:hover {
+  transform: translateY(-4px);
+}
+
+.appointment-header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  margin-bottom: 20px;
+  margin-bottom: 15px;
   padding-bottom: 15px;
-  border-bottom: 2px solid #f0f0f0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.3);
 }
 
-.calendar-header h3 {
-  color: #333;
-  font-size: 1.5rem;
-  margin: 0;
-}
-
-.nav-btn {
-  background: #f0f0f0;
-  border: none;
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  font-size: 1.5rem;
-  cursor: pointer;
-  transition: all 0.2s;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.nav-btn:hover {
-  background: #667eea;
-  color: white;
-}
-
-.calendar-grid {
-  display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  gap: 10px;
-}
-
-.calendar-weekday {
-  text-align: center;
-  font-weight: 600;
-  color: #667eea;
-  padding: 10px;
+.appointment-date,
+.appointment-time {
   font-size: 0.9rem;
-  text-transform: uppercase;
+  opacity: 0.9;
 }
 
-.calendar-day {
-  aspect-ratio: 1;
-  border: 2px solid #e0e0e0;
-  border-radius: 8px;
-  padding: 8px;
-  cursor: pointer;
-  transition: all 0.2s;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  background: white;
-  min-height: 80px;
+.appointment-body {
+  margin-bottom: 15px;
 }
 
-.calendar-day.empty {
-  border: none;
-  cursor: default;
+.appointment-body p {
+  margin: 5px 0;
 }
 
-.calendar-day:not(.empty):hover {
-  background: #f0f4ff;
-  border-color: #667eea;
-  transform: scale(1.05);
+.appointment-email {
+  font-size: 0.85rem;
+  opacity: 0.95;
+  color: #e8f0ff;
 }
 
-.calendar-day.today {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  border-color: #667eea;
-}
-
-.calendar-day.today .day-number {
-  color: white;
-}
-
-.calendar-day.has-appointments {
-  background: #e8f4fd;
-  border-color: #667eea;
-}
-
-.calendar-day.today.has-appointments {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-}
-
-.day-number {
-  font-size: 1.2rem;
-  font-weight: 600;
-  color: #333;
-  margin-bottom: 5px;
-}
-
-.appointment-count {
-  font-size: 0.75rem;
-  background: #667eea;
-  color: white;
-  padding: 3px 8px;
-  border-radius: 12px;
+.appointment-id {
+  font-size: 0.85rem;
+  opacity: 0.95;
+  font-family: 'Courier New', monospace;
   font-weight: 600;
 }
 
-.calendar-day.today .appointment-count {
-  background: white;
-  color: #667eea;
-}
-
-/* Day Details Modal */
-.modal-body {
-  padding: 20px 30px;
-  max-height: 500px;
-  overflow-y: auto;
-}
-
-.day-appointments-list h3 {
-  color: #555;
-  margin-bottom: 20px;
-}
-
-.appointment-detail-card {
-  display: flex;
-  align-items: center;
-  gap: 15px;
-  padding: 15px;
-  background: #f8f9fa;
-  border-radius: 8px;
-  margin-bottom: 12px;
-  border-left: 4px solid #667eea;
-}
-
-.apt-time {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  padding: 10px 15px;
-  border-radius: 8px;
+.service-name {
+  opacity: 0.9;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
   font-weight: 600;
-  font-size: 1rem;
-  min-width: 80px;
-  text-align: center;
 }
 
-.apt-details {
-  flex: 1;
-}
-
-.apt-details h4 {
-  color: #333;
-  margin: 0 0 5px 0;
-  font-size: 1.1rem;
-}
-
-.apt-details p {
-  color: #666;
-  margin: 0;
-  font-size: 0.9rem;
-}
-
-.delete-btn-small {
-  background: #dc3545;
+.delete-btn {
+  background: rgba(255, 255, 255, 0.2);
   color: white;
-  border: none;
+  border: 1px solid white;
   padding: 8px 16px;
   border-radius: 6px;
   cursor: pointer;
   font-size: 0.9rem;
-  transition: background 0.2s;
+  transition: all 0.3s;
 }
 
-.delete-btn-small:hover {
-  background: #c82333;
-}
-
-.empty-state {
-  text-align: center;
-  padding: 40px;
-  color: #999;
-}
-
-.empty-state p {
-  font-size: 1.1rem;
-  font-style: italic;
+.delete-btn:hover {
+  background: white;
+  color: #667eea;
 }
 
 /* ============ INVENTORY STYLES ============ */
