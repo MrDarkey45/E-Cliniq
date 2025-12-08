@@ -105,9 +105,28 @@ function MedicalRecords() {
 
     try {
       const dataToSend = {
-        ...formData,
-        prescribedMedicines: JSON.stringify(formData.prescribedMedicines)
+        appointmentId: formData.appointmentId,
+        patientName: formData.patientName,
+        email: formData.email,
+        idNumber: formData.idNumber,
+        age: formData.age,
+        gender: formData.gender,
+        symptoms: formData.symptoms,
+        diagnosis: formData.diagnosis,
+        treatment: formData.treatment,
+        medications: formData.medications,
+        prescribedMedicines: JSON.stringify(formData.prescribedMedicines),
+        allergies: formData.allergies,
+        bloodPressure: formData.bloodPressure,
+        heartRate: formData.heartRate,
+        temperature: formData.temperature,
+        notes: formData.notes,
+        followUpDate: formData.followUpDate,
+        labResults: formData.labResults,
+        xrayNotes: formData.xrayNotes
       };
+
+      console.log('Sending medical record data:', dataToSend);
 
       const response = await fetch(`${API_URL}/medical-records`, {
         method: 'POST',
@@ -118,6 +137,7 @@ function MedicalRecords() {
       if (!response.ok) throw new Error('Failed to create medical record');
 
       const newRecord = await response.json();
+      console.log('Created record:', newRecord);
       
       // Deduct prescribed medicines from inventory
       for (const med of formData.prescribedMedicines) {
