@@ -79,16 +79,16 @@ app.get('/api/inventory', (req, res) => {
 
 // Add new inventory item
 app.post('/api/inventory', (req, res) => {
-  const { name, dosage, unit, quantity } = req.body;
+  const { name, dosage, unit, quantity, price } = req.body;
   
-  console.log('Received inventory data:', { name, dosage, unit, quantity });
+  console.log('Received inventory data:', { name, dosage, unit, quantity, price });
   
-  if (!name || quantity === undefined) {
-    return res.status(400).json({ error: 'Name and quantity are required' });
+  if (!name || quantity === undefined || price === undefined) {
+    return res.status(400).json({ error: 'Name, quantity, and price are required' });
   }
 
-  if (quantity < 0) {
-    return res.status(400).json({ error: 'Quantity must be positive' });
+  if (quantity < 0 || price < 0) {
+    return res.status(400).json({ error: 'Quantity and price must be positive' });
   }
 
   try {
@@ -96,8 +96,8 @@ app.post('/api/inventory', (req, res) => {
       name, 
       dosage: dosage || '',
       unit: unit || 'mg',
-      quantity: parseInt(quantity),
-      price: 0
+      quantity: parseInt(quantity), 
+      price: parseFloat(price) 
     });
     console.log('Created item:', newItem);
     res.status(201).json(newItem);
@@ -110,7 +110,7 @@ app.post('/api/inventory', (req, res) => {
 // Update inventory item quantity
 app.put('/api/inventory/:id', (req, res) => {
   const id = parseInt(req.params.id);
-  const { name, dosage, unit, quantity } = req.body;
+  const { name, dosage, unit, quantity, price } = req.body;
   
   try {
     const item = inventoryQueries.getById(id);
@@ -119,14 +119,14 @@ app.put('/api/inventory/:id', (req, res) => {
     }
 
     // Check if it's a full update or just quantity
-    if (name || dosage !== undefined || unit !== undefined) {
+    if (name || dosage !== undefined || unit !== undefined || price !== undefined) {
       // Full update
       const updatedItem = inventoryQueries.update(id, {
         name: name || item.name,
         dosage: dosage !== undefined ? dosage : item.dosage,
         unit: unit !== undefined ? unit : (item.unit || 'mg'),
         quantity: quantity !== undefined ? parseInt(quantity) : item.quantity,
-        price: item.price || 0
+        price: price !== undefined ? parseFloat(price) : item.price
       });
       res.json(updatedItem);
     } else if (quantity !== undefined) {
