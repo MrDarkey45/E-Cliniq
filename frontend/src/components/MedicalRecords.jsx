@@ -366,15 +366,11 @@ function MedicalRecords() {
                     )}
                   </td>
                   <td className="actions-cell">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
+                    <button onClick={(e) => {e.stopPropagation();
                         handleDelete(record.id);
                       }}
                       className="delete-btn-icon"
-                      title="Delete record"
-                    >
-                      🗑️
+                      title="Delete record" > 🗑️
                     </button>
                   </td>
                 </tr>
