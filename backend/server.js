@@ -33,21 +33,27 @@ app.get('/api/appointments', (req, res) => {
 
 // Create new appointment
 app.post('/api/appointments', (req, res) => {
-  const { date, time, clientName, service } = req.body;
+  const { date, time, clientName, email, idNumber, service } = req.body;  // ✅ Add email and idNumber
   
   if (!date || !time || !clientName || !service) {
-    return res.status(400).json({ error: 'All fields are required' });
+    return res.status(400).json({ error: 'Date, time, client name, and service are required' });
   }
 
   try {
-    const newAppointment = appointmentQueries.create({ date, time, clientName, service });
+    const newAppointment = appointmentQueries.create({ 
+      date, 
+      time, 
+      clientName, 
+      email: email || null,      // ✅ Include email (optional)
+      idNumber: idNumber || null, // ✅ Include idNumber (optional)
+      service 
+    });
     res.status(201).json(newAppointment);
   } catch (err) {
     console.error('Error creating appointment:', err);
     res.status(500).json({ error: 'Failed to create appointment' });
   }
 });
-
 // Delete appointment
 app.delete('/api/appointments/:id', (req, res) => {
   const id = parseInt(req.params.id);
@@ -177,7 +183,7 @@ app.get('/api/medical-records', (req, res) => {
 // Create new medical record
 app.post('/api/medical-records', (req, res) => {
   const { 
-    appointmentId, patientName, age, gender, diagnosis, symptoms, treatment, 
+    appointmentId, patientName, age, gender, email, idNumber, diagnosis, symptoms, treatment, 
     medications, allergies, bloodPressure, heartRate, temperature, 
     notes, followUpDate, labResults, xrayNotes 
   } = req.body;
@@ -188,9 +194,24 @@ app.post('/api/medical-records', (req, res) => {
 
   try {
     const newRecord = medicalRecordQueries.create({
-      appointmentId, patientName, age, gender, diagnosis, symptoms, treatment,
-      medications, allergies, bloodPressure, heartRate, temperature,
-      notes, followUpDate, labResults, xrayNotes
+      appointmentId, 
+      patientName, 
+      age, 
+      gender, 
+      email: email || null,           // ✅ Added email
+      idNumber: idNumber || null,     // ✅ Added idNumber
+      diagnosis, 
+      symptoms, 
+      treatment,
+      medications, 
+      allergies, 
+      bloodPressure, 
+      heartRate, 
+      temperature,
+      notes, 
+      followUpDate, 
+      labResults, 
+      xrayNotes
     });
     res.status(201).json(newRecord);
   } catch (err) {
@@ -226,7 +247,14 @@ app.put('/api/medical-records/:id', (req, res) => {
       return res.status(404).json({ error: 'Medical record not found' });
     }
 
-    const updatedRecord = medicalRecordQueries.update(id, data);
+    // Include email and idNumber in the update data
+    const updatedData = {
+      ...data,
+      email: data.email || null,           // ✅ Handle email in updates
+      idNumber: data.idNumber || null      // ✅ Handle idNumber in updates
+    };
+
+    const updatedRecord = medicalRecordQueries.update(id, updatedData);
     res.json(updatedRecord);
   } catch (err) {
     console.error('Error updating medical record:', err);
