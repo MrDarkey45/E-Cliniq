@@ -178,6 +178,50 @@ body {
   font-size: 1.8rem;
 }
 
+.scheduler-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  gap: 15px;
+}
+
+.create-appointment-btn {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 6px rgba(102, 126, 234, 0.3);
+}
+
+.create-appointment-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 12px rgba(102, 126, 234, 0.4);
+}
+
+.toggle-view-btn-prominent {
+  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+  color: white;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 6px rgba(245, 87, 108, 0.3);
+}
+
+.toggle-view-btn-prominent:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 12px rgba(245, 87, 108, 0.4);
+}
+
 .appointment-form {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -606,6 +650,70 @@ body {
   animation: slideUp 0.3s ease;
   display: flex;
   flex-direction: column;
+}
+
+.modal-container-wide {
+  max-width: 750px;
+}
+
+.error-message-modal {
+  background: #fee;
+  color: #c00;
+  padding: 12px 20px;
+  margin: 0 20px 15px;
+  border-radius: 8px;
+  border-left: 4px solid #c00;
+  font-size: 0.95rem;
+}
+
+.conflict-info {
+  background: #fff9e6;
+  border: 2px solid #fbbf24;
+  border-radius: 12px;
+  padding: 20px;
+  margin: 0 20px 20px;
+}
+
+.conflict-message {
+  color: #92400e;
+  font-size: 1rem;
+  margin: 0 0 15px 0;
+  font-weight: 500;
+}
+
+.suggested-times {
+  margin-top: 10px;
+}
+
+.suggested-label {
+  color: #78350f;
+  font-size: 0.9rem;
+  font-weight: 600;
+  margin: 0 0 10px 0;
+}
+
+.suggested-times-buttons {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.suggested-time-btn {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 4px rgba(16, 185, 129, 0.3);
+}
+
+.suggested-time-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(16, 185, 129, 0.4);
 }
 
 @keyframes slideUp {

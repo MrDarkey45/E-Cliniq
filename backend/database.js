@@ -22,6 +22,8 @@ const createTables = () => {
       clientName TEXT NOT NULL,
       email TEXT,
       idNumber TEXT,
+      age INTEGER,
+      gender TEXT,
       service TEXT NOT NULL,
       createdAt TEXT NOT NULL
     )
@@ -131,8 +133,8 @@ export const appointmentQueries = {
 
   create: (data) => {
     const stmt = db.prepare(`
-      INSERT INTO appointments (date, time, clientName, email, idNumber, service, createdAt)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO appointments (date, time, clientName, email, idNumber, age, gender, service, createdAt)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     const result = stmt.run(
       data.date,
@@ -140,6 +142,8 @@ export const appointmentQueries = {
       data.clientName,
       data.email || null,
       data.idNumber || null,
+      data.age || null,
+      data.gender || null,
       data.service,
       new Date().toISOString()
     );

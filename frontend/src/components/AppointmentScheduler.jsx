@@ -9,8 +9,11 @@ function AppointmentScheduler() {
     clientName: '',
     email: '',
     idNumber: '',
+    age: '',
+    gender: '',
     service: ''
   });
+  const [showFormModal, setShowFormModal] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [conflictInfo, setConflictInfo] = useState(null); // New state for conflict information
@@ -55,38 +58,26 @@ function AppointmentScheduler() {
     try {
       const newAppointment = await appointmentsAPI.create(formData);
       setAppointments([...appointments, newAppointment]);
-      setFormData({ date: '', time: '', clientName: '', email: '', idNumber: '', service: '' });
+      setFormData({ date: '', time: '', clientName: '', email: '', idNumber: '', age: '', gender: '', service: '' });
+      closeFormModal();
     } catch (err) {
-      // Check if this is a conflict error (409)
-      if (err.message.includes('Time slot unavailable')) {
-        // Parse the error response to get conflict details
-        // The error object should contain conflictingAppointment and suggestedTimes
-        try {
-          const response = await fetch('http://localhost:3001/api/appointments', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${localStorage.getItem('token')}`
-            },
-            body: JSON.stringify(formData)
-          });
-
-          if (response.status === 409) {
-            const conflictData = await response.json();
-            setConflictInfo(conflictData);
-            setError(conflictData.error);
-          } else {
-            setError(err.message);
-          }
-        } catch {
-          setError(err.message);
-        }
+      // Check if this is a conflict error with conflict data
+      if (err.conflictData) {
+        setConflictInfo(err.conflictData);
+        setError(err.conflictData.error);
       } else {
         setError(err.message);
       }
     } finally {
       setLoading(false);
     }
+  };
+
+  // Handler to close modal and clear states
+  const closeFormModal = () => {
+    setShowFormModal(false);
+    setConflictInfo(null);
+    setError('');
   };
 
   // Handler to select a suggested time
@@ -208,9 +199,17 @@ function AppointmentScheduler() {
 
   return (
     <div className="scheduler-container">
-      <h2>📅 Appointment Scheduler</h2>
-
       {error && <div className="error-message">{error}</div>}
+
+      {/* Header with Action Buttons */}
+      <div className="scheduler-header">
+        <button onClick={() => setShowFormModal(true)} className="create-appointment-btn">
+          + New Appointment
+        </button>
+        <button onClick={toggleView} className="toggle-view-btn-prominent">
+          {view === 'list' ? '📅 Calendar View' : '📋 List View'}
+        </button>
+      </div>
 
       {/* Conflict Information with Suggested Times */}
       {conflictInfo && conflictInfo.suggestedTimes && (
@@ -239,13 +238,45 @@ function AppointmentScheduler() {
         </div>
       )}
 
-      {/* Toggle View Button */}
-      <button onClick={toggleView} className="toggle-view-btn">
-        {view === 'list' ? '📅 Calendar View' : '📋 List View'}
-      </button>
+      {/* Modal Form */}
+      {showFormModal && (
+        <div className="modal-overlay" onClick={closeFormModal}>
+          <div className="modal-container modal-container-wide" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>📅 New Appointment</h2>
+              <button onClick={closeFormModal} className="modal-close-btn">✕</button>
+            </div>
 
-      {/* Form */}
-      <form onSubmit={handleSubmit} className="appointment-form">
+            {error && (
+              <div className="error-message-modal">
+                {error}
+              </div>
+            )}
+
+            {conflictInfo && conflictInfo.suggestedTimes && (
+              <div className="conflict-info">
+                <p className="conflict-message">
+                  ⚠️ Time slot unavailable. The {conflictInfo.conflictingAppointment?.time} slot is already booked for {conflictInfo.conflictingAppointment?.clientName}.
+                </p>
+                <div className="suggested-times">
+                  <p className="suggested-label">Available time slots:</p>
+                  <div className="suggested-times-buttons">
+                    {conflictInfo.suggestedTimes.map((time, index) => (
+                      <button
+                        key={index}
+                        type="button"
+                        onClick={() => handleSelectSuggestedTime(time)}
+                        className="suggested-time-btn"
+                      >
+                        {time}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <form onSubmit={handleSubmit} className="modal-form">
         <div className="form-group">
           <label>Date:</label>
           <input
@@ -303,6 +334,35 @@ function AppointmentScheduler() {
           />
         </div>
 
+        <div className="form-row">
+          <div className="form-group-modal">
+            <label>Age:</label>
+            <input
+              type="number"
+              name="age"
+              value={formData.age}
+              onChange={handleChange}
+              placeholder="25"
+              min="0"
+              max="150"
+            />
+          </div>
+
+          <div className="form-group-modal">
+            <label>Gender:</label>
+            <select
+              name="gender"
+              value={formData.gender}
+              onChange={handleChange}
+            >
+              <option value="">Select Gender</option>
+              <option value="Male">Male</option>
+              <option value="Female">Female</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+        </div>
+
         <div className="form-group">
           <label>Service:</label>
           <input
@@ -315,10 +375,18 @@ function AppointmentScheduler() {
           />
         </div>
 
-        <button type="submit" disabled={loading} className="submit-btn">
-          {loading ? 'Creating...' : 'Create Appointment'}
-        </button>
+        <div className="modal-footer">
+          <button type="button" onClick={closeFormModal} className="cancel-btn">
+            Cancel
+          </button>
+          <button type="submit" disabled={loading} className="submit-btn-modal">
+            {loading ? 'Creating...' : '✓ Create Appointment'}
+          </button>
+        </div>
       </form>
+          </div>
+        </div>
+      )}
 
       {/* Calendar View */}
 {view === 'calendar' && (

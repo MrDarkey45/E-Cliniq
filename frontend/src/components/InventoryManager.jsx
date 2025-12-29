@@ -63,11 +63,18 @@ function InventoryManager() {
     setLoading(true);
     setError('');
 
+    const dataToSend = {
+      name: formData.name,
+      dosage: formData.dosage,
+      unit: formData.unit,
+      quantity: parseInt(formData.quantity)
+    };
+
     try {
       if (editMode) {
         // Update existing item
         const updatedItem = await inventoryAPI.update(currentItem.id, dataToSend);
-        setInventory(inventory.map(item => 
+        setInventory(inventory.map(item =>
           item.id === currentItem.id ? updatedItem : item
         ));
       } else {
@@ -89,8 +96,17 @@ function InventoryManager() {
     if (!window.confirm('Delete this medicine? This action cannot be undone.')) return;
 
     try {
+      await inventoryAPI.delete(id);
+      setInventory(inventory.filter(item => item.id !== id));
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  const handleQuickUpdate = async (id, newQuantity) => {
+    try {
       const updatedItem = await inventoryAPI.update(id, { quantity: parseInt(newQuantity) });
-      setInventory(inventory.map(item => 
+      setInventory(inventory.map(item =>
         item.id === id ? updatedItem : item
       ));
     } catch (err) {

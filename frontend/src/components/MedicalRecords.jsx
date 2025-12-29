@@ -148,10 +148,14 @@ function MedicalRecords() {
         // Show inventory updates if any
         if (response.inventoryUpdates && response.inventoryUpdates.length > 0) {
           console.log('Inventory updates:', response.inventoryUpdates);
-          const updateMessages = response.inventoryUpdates.map(update =>
-            `${update.medicineName}: ${update.quantityChange > 0 ? '+' : ''}${update.quantityChange} (Stock: ${update.newStock})`
-          ).join('\n');
-          alert(`Inventory Updated:\n${updateMessages}`);
+          const updateMessages = response.inventoryUpdates.map(update => {
+            if (update.quantityChange > 0) {
+              return `✅ ${update.medicineName}: Returned ${update.quantityChange} to stock (New Stock: ${update.newStock})`;
+            } else {
+              return `📦 ${update.medicineName}: Dispensed ${Math.abs(update.quantityChange)} (New Stock: ${update.newStock})`;
+            }
+          }).join('\n');
+          alert(`💊 Inventory Updated:\n\n${updateMessages}`);
         }
       } else {
         // Create new record
@@ -166,9 +170,9 @@ function MedicalRecords() {
         if (response.inventoryUpdates && response.inventoryUpdates.length > 0) {
           console.log('Inventory updates:', response.inventoryUpdates);
           const updateMessages = response.inventoryUpdates.map(update =>
-            `${update.medicineName}: -${update.quantityDeducted} (Stock: ${update.newStock})`
+            `📦 ${update.medicineName}: Dispensed ${update.quantityDeducted} (New Stock: ${update.newStock})`
           ).join('\n');
-          alert(`Prescription dispensed! Inventory Updated:\n${updateMessages}`);
+          alert(`💊 Prescription Dispensed!\n\n${updateMessages}`);
         }
       }
 

@@ -43,6 +43,13 @@ const apiRequest = async (endpoint, options = {}) => {
         window.location.reload();
       }
 
+      // For conflict errors (409), include full response data
+      if (response.status === 409) {
+        const error = new Error(data.error || 'Conflict');
+        error.conflictData = data;
+        throw error;
+      }
+
       throw new Error(data.error || `HTTP ${response.status}`);
     }
 
