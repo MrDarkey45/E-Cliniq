@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { inventoryAPI } from '../services/api';
+import { FaPlus, FaEdit, FaTrash, FaPills, FaSearch, FaMinus, FaTimes, FaCheck } from 'react-icons/fa';
 
 function InventoryManager() {
   const [inventory, setInventory] = useState([]);
@@ -135,7 +136,7 @@ function InventoryManager() {
 
       <div className="inventory-header">
         <button onClick={openCreateModal} className="create-btn">
-          + Add Medicine
+          <FaPlus style={{ marginRight: '8px' }} /> Add Medicine
         </button>
       </div>
 
@@ -159,19 +160,21 @@ function InventoryManager() {
       </div>
 
       <div className="search-bar">
+        <FaSearch style={{ position: 'absolute', left: '15px', top: '50%', transform: 'translateY(-50%)', color: '#666', pointerEvents: 'none' }} />
         <input
           type="text"
-          placeholder="🔍 Search by medicine name or dosage..."
+          placeholder="Search by medicine name or dosage..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           className="search-input"
+          style={{ paddingLeft: '40px' }}
         />
       </div>
 
       <div className="inventory-table-container">
         {filteredInventory.length === 0 ? (
           <div className="empty-state-large">
-            <div className="empty-icon">💊</div>
+            <div className="empty-icon"><FaPills size={64} color="#ccc" /></div>
             <h3>No medicines in inventory</h3>
             <p>Click "Add Medicine" to add your first medicine</p>
           </div>
@@ -202,14 +205,14 @@ function InventoryManager() {
                         className="qty-btn"
                         disabled={item.quantity === 0}
                       >
-                        -
+                        <FaMinus />
                       </button>
                       <span className="quantity">{item.quantity}</span>
                       <button
                         onClick={() => handleQuickUpdate(item.id, item.quantity + 1)}
                         className="qty-btn"
                       >
-                        +
+                        <FaPlus />
                       </button>
                     </div>
                   </td>
@@ -220,14 +223,14 @@ function InventoryManager() {
                         className="edit-btn"
                         title="Edit medicine"
                       >
-                        ✏️
+                        <FaEdit />
                       </button>
                       <button
                         onClick={() => handleDelete(item.id)}
                         className="delete-btn-icon"
                         title="Delete medicine"
                       >
-                        🗑️
+                        <FaTrash />
                       </button>
                     </div>
                   </td>
@@ -243,8 +246,8 @@ function InventoryManager() {
         <div className="modal-overlay" onClick={() => setShowModal(false)}>
           <div className="modal-container" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h2>{editMode ? '✏️ Edit Medicine' : '➕ Add New Medicine'}</h2>
-              <button onClick={() => setShowModal(false)} className="modal-close-btn">✕</button>
+              <h2>{editMode ? <><FaEdit style={{ marginRight: '8px' }} /> Edit Medicine</> : <><FaPlus style={{ marginRight: '8px' }} /> Add New Medicine</>}</h2>
+              <button onClick={() => setShowModal(false)} className="modal-close-btn"><FaTimes /></button>
             </div>
 
             <form onSubmit={handleSubmit} className="modal-form">
@@ -306,7 +309,7 @@ function InventoryManager() {
                 </div>
 
                 <div className="info-box">
-                  <strong>💡 Tip:</strong> Enter the numeric dosage value and select the appropriate unit. Use "mg" for tablets/capsules and "ml" for liquid medicines.
+                  <strong>Tip:</strong> Enter the numeric dosage value and select the appropriate unit. Use "mg" for tablets/capsules and "ml" for liquid medicines.
                 </div>
               </div>
 
@@ -315,7 +318,7 @@ function InventoryManager() {
                   Cancel
                 </button>
                 <button type="submit" disabled={loading} className="submit-btn-modal">
-                  {loading ? 'Saving...' : editMode ? '✓ Update Medicine' : '✓ Add Medicine'}
+                  {loading ? 'Saving...' : editMode ? <><FaCheck style={{ marginRight: '6px' }} /> Update Medicine</> : <><FaCheck style={{ marginRight: '6px' }} /> Add Medicine</>}
                 </button>
               </div>
             </form>

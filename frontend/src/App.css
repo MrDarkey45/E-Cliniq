@@ -411,7 +411,7 @@ body {
 }
 
 .create-btn {
-  background: linear-gradient(135deg, #1e40af 0%, #fbbf24 100%);
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
   border: none;
   padding: 12px 24px;
@@ -420,12 +420,12 @@ body {
   font-weight: 600;
   cursor: pointer;
   transition: transform 0.2s, box-shadow 0.2s;
-  box-shadow: 0 4px 12px rgba(30, 64, 175, 0.3);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
 }
 
 .create-btn:hover {
   transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(30, 64, 175, 0.4);
+  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
 }
 
 .inventory-stats {
@@ -660,7 +660,7 @@ body {
   background: #fee;
   color: #c00;
   padding: 12px 20px;
-  margin: 0 20px 15px;
+  margin: 0 30px 15px;
   border-radius: 8px;
   border-left: 4px solid #c00;
   font-size: 0.95rem;
@@ -671,7 +671,7 @@ body {
   border: 2px solid #fbbf24;
   border-radius: 12px;
   padding: 20px;
-  margin: 0 20px 20px;
+  margin: 0 30px 20px;
 }
 
 .conflict-message {
@@ -766,7 +766,11 @@ body {
 }
 
 .tab-content {
-  padding: 30px;
+  padding: 35px 40px;
+}
+
+.form-content-padded {
+  padding: 35px 40px;
 }
 
 .form-row {
@@ -2718,7 +2722,7 @@ body {
    ============================================ */
 
 .prescription-tab-compact {
-  padding: 0;
+  padding: 35px 40px;
 }
 
 .prescription-layout {

@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react';
 import { appointmentsAPI } from '../services/api';
+import { FaCalendarAlt, FaList, FaExclamationTriangle, FaTimes, FaTrash, FaChevronLeft, FaChevronRight, FaCalendarDay } from 'react-icons/fa';
 
 function AppointmentScheduler() {
   const [appointments, setAppointments] = useState([]);
   const [formData, setFormData] = useState({
-    date: '',
-    time: '',
+    datetime: '',
     clientName: '',
     email: '',
     idNumber: '',
@@ -56,9 +56,18 @@ function AppointmentScheduler() {
     setConflictInfo(null);
 
     try {
-      const newAppointment = await appointmentsAPI.create(formData);
+      // Split datetime into date and time for API
+      const dataToSend = { ...formData };
+      if (formData.datetime) {
+        const dt = new Date(formData.datetime);
+        dataToSend.date = dt.toISOString().split('T')[0]; // YYYY-MM-DD
+        dataToSend.time = dt.toTimeString().slice(0, 5); // HH:MM
+        delete dataToSend.datetime;
+      }
+
+      const newAppointment = await appointmentsAPI.create(dataToSend);
       setAppointments([...appointments, newAppointment]);
-      setFormData({ date: '', time: '', clientName: '', email: '', idNumber: '', age: '', gender: '', service: '' });
+      setFormData({ datetime: '', clientName: '', email: '', idNumber: '', age: '', gender: '', service: '' });
       closeFormModal();
     } catch (err) {
       // Check if this is a conflict error with conflict data
@@ -82,9 +91,20 @@ function AppointmentScheduler() {
 
   // Handler to select a suggested time
   const handleSelectSuggestedTime = (suggestedTime) => {
+    // Extract date from current datetime value, or use today if empty
+    let dateStr = '';
+    if (formData.datetime) {
+      dateStr = formData.datetime.split('T')[0];
+    } else {
+      dateStr = new Date().toISOString().split('T')[0];
+    }
+
+    // Combine date with suggested time
+    const newDatetime = `${dateStr}T${suggestedTime}`;
+
     setFormData({
       ...formData,
-      time: suggestedTime
+      datetime: newDatetime
     });
     setConflictInfo(null);
     setError('');
@@ -207,14 +227,14 @@ function AppointmentScheduler() {
           + New Appointment
         </button>
         <button onClick={toggleView} className="toggle-view-btn-prominent">
-          {view === 'list' ? '📅 Calendar View' : '📋 List View'}
+          {view === 'list' ? <><FaCalendarAlt style={{ marginRight: '8px' }} /> Calendar View</> : <><FaList style={{ marginRight: '8px' }} /> List View</>}
         </button>
       </div>
 
       {/* Conflict Information with Suggested Times */}
       {conflictInfo && conflictInfo.suggestedTimes && (
         <div className="conflict-info">
-          <h3>⚠️ Appointment Conflict</h3>
+          <h3><FaExclamationTriangle style={{ marginRight: '8px' }} /> Appointment Conflict</h3>
           <p>
             <strong>Conflicting Appointment:</strong> {conflictInfo.conflictingAppointment.clientName} at {conflictInfo.conflictingAppointment.time}
             <br />
@@ -243,8 +263,8 @@ function AppointmentScheduler() {
         <div className="modal-overlay" onClick={closeFormModal}>
           <div className="modal-container modal-container-wide" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h2>📅 New Appointment</h2>
-              <button onClick={closeFormModal} className="modal-close-btn">✕</button>
+              <h2><FaCalendarAlt style={{ marginRight: '8px' }} /> New Appointment</h2>
+              <button onClick={closeFormModal} className="modal-close-btn"><FaTimes /></button>
             </div>
 
             {error && (
@@ -256,7 +276,7 @@ function AppointmentScheduler() {
             {conflictInfo && conflictInfo.suggestedTimes && (
               <div className="conflict-info">
                 <p className="conflict-message">
-                  ⚠️ Time slot unavailable. The {conflictInfo.conflictingAppointment?.time} slot is already booked for {conflictInfo.conflictingAppointment?.clientName}.
+                  <FaExclamationTriangle style={{ marginRight: '8px' }} /> Time slot unavailable. The {conflictInfo.conflictingAppointment?.time} slot is already booked for {conflictInfo.conflictingAppointment?.clientName}.
                 </p>
                 <div className="suggested-times">
                   <p className="suggested-label">Available time slots:</p>
@@ -277,23 +297,13 @@ function AppointmentScheduler() {
             )}
 
             <form onSubmit={handleSubmit} className="modal-form">
+              <div className="form-content-padded">
         <div className="form-group">
-          <label>Date:</label>
+          <label>Date & Time:</label>
           <input
-            type="date"
-            name="date"
-            value={formData.date}
-            onChange={handleChange}
-            required
-          />
-        </div>
-
-        <div className="form-group">
-          <label>Time:</label>
-          <input
-            type="time"
-            name="time"
-            value={formData.time}
+            type="datetime-local"
+            name="datetime"
+            value={formData.datetime}
             onChange={handleChange}
             required
           />
@@ -374,6 +384,7 @@ function AppointmentScheduler() {
             required
           />
         </div>
+              </div>
 
         <div className="modal-footer">
           <button type="button" onClick={closeFormModal} className="cancel-btn">
@@ -393,16 +404,16 @@ function AppointmentScheduler() {
   <div className="calendar-view">
     <div className="calendar-controls">
       <button onClick={goToPreviousMonth} className="month-nav-btn">
-        ◀ Previous
+        <FaChevronLeft style={{ marginRight: '6px' }} /> Previous
       </button>
       <div className="month-year-display">
-        <h3>🗓️ {monthYearDisplay}</h3>
+        <h3><FaCalendarDay style={{ marginRight: '8px' }} /> {monthYearDisplay}</h3>
       </div>
       <button onClick={goToNextMonth} className="month-nav-btn">
-        Next ▶
+        Next <FaChevronRight style={{ marginLeft: '6px' }} />
       </button>
       <button onClick={goToToday} className="today-btn">
-        📅 Today
+        <FaCalendarAlt style={{ marginRight: '6px' }} /> Today
       </button>
     </div>
 
@@ -549,13 +560,13 @@ function AppointmentScheduler() {
           <div className="modal-content appointment-modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header-appointments">
               <div className="modal-date-display">
-                <div className="date-icon">📅</div>
+                <div className="date-icon"><FaCalendarAlt size={32} /></div>
                 <div className="date-info">
                   <h2>{new Date(selectedDate).toLocaleDateString('en-US', { weekday: 'long' })}</h2>
                   <p>{new Date(selectedDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</p>
                 </div>
               </div>
-              <button onClick={closeModal} className="modal-close-btn">✕</button>
+              <button onClick={closeModal} className="modal-close-btn"><FaTimes /></button>
             </div>
 
             <div className="modal-body-appointments">
@@ -588,7 +599,7 @@ function AppointmentScheduler() {
                           className="delete-btn-modal"
                           title="Delete appointment"
                         >
-                          🗑️
+                          <FaTrash />
                         </button>
                       </div>
                     ))}
