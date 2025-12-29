@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
-
-const API_URL = 'http://localhost:3001/api';
+import { inventoryAPI } from '../services/api';
 
 function InventoryManager() {
   const [inventory, setInventory] = useState([]);
@@ -23,8 +22,7 @@ function InventoryManager() {
 
   const fetchInventory = async () => {
     try {
-      const response = await fetch(`${API_URL}/inventory`);
-      const data = await response.json();
+      const data = await inventoryAPI.getAll();
       setInventory(data);
     } catch (err) {
       setError('Failed to fetch inventory');
@@ -68,29 +66,13 @@ function InventoryManager() {
     try {
       if (editMode) {
         // Update existing item
-        const response = await fetch(`${API_URL}/inventory/${currentItem.id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(formData)
-        });
-
-        if (!response.ok) throw new Error('Failed to update item');
-
-        const updatedItem = await response.json();
+        const updatedItem = await inventoryAPI.update(currentItem.id, dataToSend);
         setInventory(inventory.map(item => 
           item.id === currentItem.id ? updatedItem : item
         ));
       } else {
         // Create new item
-        const response = await fetch(`${API_URL}/inventory`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(formData)
-        });
-
-        if (!response.ok) throw new Error('Failed to add item');
-
-        const newItem = await response.json();
+        const newItem = await inventoryAPI.create(dataToSend);
         setInventory([...inventory, newItem]);
       }
 
@@ -107,29 +89,7 @@ function InventoryManager() {
     if (!window.confirm('Delete this medicine? This action cannot be undone.')) return;
 
     try {
-      const response = await fetch(`${API_URL}/inventory/${id}`, {
-        method: 'DELETE'
-      });
-
-      if (!response.ok) throw new Error('Failed to delete item');
-
-      setInventory(inventory.filter(item => item.id !== id));
-    } catch (err) {
-      setError(err.message);
-    }
-  };
-
-  const handleQuickUpdate = async (id, newQuantity) => {
-    try {
-      const response = await fetch(`${API_URL}/inventory/${id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ quantity: newQuantity })
-      });
-
-      if (!response.ok) throw new Error('Failed to update quantity');
-
-      const updatedItem = await response.json();
+      const updatedItem = await inventoryAPI.update(id, { quantity: parseInt(newQuantity) });
       setInventory(inventory.map(item => 
         item.id === id ? updatedItem : item
       ));

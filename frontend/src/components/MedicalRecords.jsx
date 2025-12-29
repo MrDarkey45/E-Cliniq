@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
-
-const API_URL = 'http://localhost:3001/api';
+import { medicalRecordsAPI, appointmentsAPI, inventoryAPI } from '../services/api';
 
 function MedicalRecords() {
   const [records, setRecords] = useState([]);
@@ -31,10 +30,14 @@ function MedicalRecords() {
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [duplicateInfo, setDuplicateInfo] = useState(null); // New state for duplicate detection
   const [selectedRecord, setSelectedRecord] = useState(null);
   const [viewModal, setViewModal] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterBy, setFilterBy] = useState('all');
+  const [patientAppointments, setPatientAppointments] = useState([]);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editingRecordId, setEditingRecordId] = useState(null);
 
   useEffect(() => {
     fetchRecords();
@@ -44,8 +47,7 @@ function MedicalRecords() {
 
   const fetchRecords = async () => {
     try {
-      const response = await fetch(`${API_URL}/medical-records`);
-      const data = await response.json();
+      const data = await medicalRecordsAPI.getAll();
       setRecords(data);
     } catch (err) {
       setError('Failed to fetch medical records');
@@ -55,8 +57,7 @@ function MedicalRecords() {
 
   const fetchAppointments = async () => {
     try {
-      const response = await fetch(`${API_URL}/appointments`);
-      const data = await response.json();
+      const data = await appointmentsAPI.getAll();
       setAppointments(data);
     } catch (err) {
       console.error('Failed to fetch appointments', err);
@@ -65,8 +66,7 @@ function MedicalRecords() {
 
   const fetchInventory = async () => {
     try {
-      const response = await fetch(`${API_URL}/inventory`);
-      const data = await response.json();
+      const data = await inventoryAPI.getAll();
       setInventory(data);
     } catch (err) {
       console.error('Failed to fetch inventory', err);
@@ -74,6 +74,7 @@ function MedicalRecords() {
   };
 
   const resetForm = () => {
+    setDuplicateInfo(null);
     setFormData({
       appointmentId: '',
       patientName: '',
@@ -96,12 +97,15 @@ function MedicalRecords() {
       xrayNotes: ''
     });
     setModalTab('basic');
+    setIsEditing(false);
+    setEditingRecordId(null);
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError('');
+    setDuplicateInfo(null);
 
     try {
       const dataToSend = {
@@ -128,57 +132,88 @@ function MedicalRecords() {
 
       console.log('Sending medical record data:', dataToSend);
 
-      const response = await fetch(`${API_URL}/medical-records`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(dataToSend)
-      });
+      let savedRecord;
+      if (isEditing && editingRecordId) {
+        // Update existing record
+        savedRecord = await medicalRecordsAPI.update(editingRecordId, dataToSend);
+        console.log('Updated record:', savedRecord);
 
-      if (!response.ok) throw new Error('Failed to create medical record');
+        // Update the record in the list
+        setRecords(records.map(record =>
+          record.id === editingRecordId ? savedRecord : record
+        ));
+      } else {
+        // Create new record
+        savedRecord = await medicalRecordsAPI.create(dataToSend);
+        console.log('Created record:', savedRecord);
 
-      const newRecord = await response.json();
-      console.log('Created record:', newRecord);
-      
-      // Deduct prescribed medicines from inventory
-      for (const med of formData.prescribedMedicines) {
-        try {
-          const inventoryItem = inventory.find(item => item.id === med.id);
-          if (inventoryItem) {
-            const newQuantity = inventoryItem.quantity - med.quantity;
-            await fetch(`${API_URL}/inventory/${med.id}`, {
-              method: 'PUT',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ quantity: Math.max(0, newQuantity) })
-            });
+        // Add new record to the list
+        setRecords([...records, savedRecord]);
+      }
+
+      // Deduct prescribed medicines from inventory (only when creating new record)
+      if (!isEditing) {
+        for (const med of formData.prescribedMedicines) {
+          try {
+            const inventoryItem = inventory.find(item => item.id === med.id);
+            if (inventoryItem) {
+              const newQuantity = inventoryItem.quantity - med.quantity;
+              await inventoryAPI.update(med.id, { quantity: Math.max(0, newQuantity) });
+            }
+          } catch (err) {
+            console.error(`Failed to update inventory for ${med.name}:`, err);
           }
-        } catch (err) {
-          console.error(`Failed to update inventory for ${med.name}:`, err);
         }
       }
-      
-      setRecords([...records, newRecord]);
+
       setShowModal(false);
       resetForm();
-      
+
       // Refresh inventory to show updated quantities
       fetchInventory();
     } catch (err) {
-      setError(err.message);
+      // Check if this is a duplicate error (409)
+      if (err.message.includes('Record exists for this patient')) {
+        // Try to get the duplicate details from the API
+        try {
+          const response = await fetch('http://localhost:3001/api/medical-records', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${localStorage.getItem('token')}`
+            },
+            body: JSON.stringify(dataToSend)
+          });
+
+          if (response.status === 409) {
+            const duplicateData = await response.json();
+            setDuplicateInfo(duplicateData);
+            setError(duplicateData.message);
+          } else {
+            setError(err.message);
+          }
+        } catch {
+          setError(err.message);
+        }
+      } else {
+        setError(err.message);
+      }
     } finally {
       setLoading(false);
     }
+  };
+
+  // Handler to edit the existing duplicate record
+  const handleEditExistingRecord = (existingRecord) => {
+    openEditModal(existingRecord);
+    setDuplicateInfo(null);
   };
 
   const handleDelete = async (id) => {
     if (!window.confirm('Delete this medical record? This cannot be undone.')) return;
 
     try {
-      const response = await fetch(`${API_URL}/medical-records/${id}`, {
-        method: 'DELETE'
-      });
-
-      if (!response.ok) throw new Error('Failed to delete record');
-
+      await medicalRecordsAPI.delete(id);
       setRecords(records.filter(record => record.id !== id));
       if (selectedRecord?.id === id) {
         setSelectedRecord(null);
@@ -258,9 +293,61 @@ function MedicalRecords() {
     });
   };
 
-  const openViewModal = (record) => {
+  const openViewModal = async (record) => {
     setSelectedRecord(record);
     setViewModal(true);
+
+    // Fetch all appointments for this patient (by ID number or email)
+    try {
+      let appointments = [];
+      if (record.idNumber) {
+        appointments = await appointmentsAPI.getForPatient(record.idNumber);
+      } else if (record.email) {
+        appointments = await appointmentsAPI.getForPatient(record.email);
+      }
+      setPatientAppointments(appointments);
+    } catch (err) {
+      console.error('Failed to fetch patient appointments:', err);
+      setPatientAppointments([]);
+    }
+  };
+
+  const openEditModal = (record) => {
+    // Parse prescribed medicines if it's a string
+    let prescribedMeds = [];
+    if (record.prescribedMedicines) {
+      try {
+        prescribedMeds = JSON.parse(record.prescribedMedicines);
+      } catch {
+        prescribedMeds = [];
+      }
+    }
+
+    setFormData({
+      appointmentId: record.appointmentId || '',
+      patientName: record.patientName || '',
+      email: record.email || '',
+      idNumber: record.idNumber || '',
+      age: record.age || '',
+      gender: record.gender || '',
+      symptoms: record.symptoms || '',
+      diagnosis: record.diagnosis || '',
+      treatment: record.treatment || '',
+      medications: record.medications || '',
+      prescribedMedicines: prescribedMeds,
+      allergies: record.allergies || '',
+      bloodPressure: record.bloodPressure || '',
+      heartRate: record.heartRate || '',
+      temperature: record.temperature || '',
+      notes: record.notes || '',
+      followUpDate: record.followUpDate || '',
+      labResults: record.labResults || '',
+      xrayNotes: record.xrayNotes || ''
+    });
+    setIsEditing(true);
+    setEditingRecordId(record.id);
+    setViewModal(false);
+    setShowModal(true);
   };
 
   const filteredRecords = records.filter(record => {
@@ -366,11 +453,23 @@ function MedicalRecords() {
                     )}
                   </td>
                   <td className="actions-cell">
-                    <button onClick={(e) => {e.stopPropagation();
+                    <button onClick={(e) => {
+                        e.stopPropagation();
+                        openEditModal(record);
+                      }}
+                      className="edit-btn-icon"
+                      title="Edit record"
+                    >
+                      ✏️
+                    </button>
+                    <button onClick={(e) => {
+                        e.stopPropagation();
                         handleDelete(record.id);
                       }}
                       className="delete-btn-icon"
-                      title="Delete record" > 🗑️
+                      title="Delete record"
+                    >
+                      🗑️
                     </button>
                   </td>
                 </tr>
@@ -385,9 +484,40 @@ function MedicalRecords() {
         <div className="modal-overlay" onClick={() => setShowModal(false)}>
           <div className="modal-container modal-large" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h2>📝 New Medical Record</h2>
-              <button onClick={() => setShowModal(false)} className="modal-close-btn">✕</button>
+              <h2>{isEditing ? '✏️ Edit Medical Record' : '📝 New Medical Record'}</h2>
+              <button onClick={() => {
+                setShowModal(false);
+                resetForm();
+              }} className="modal-close-btn">✕</button>
             </div>
+
+            {/* Duplicate Warning */}
+            {duplicateInfo && duplicateInfo.existingRecord && (
+              <div className="duplicate-warning">
+                <h3>⚠️ Duplicate Record Detected</h3>
+                <p>{duplicateInfo.message}</p>
+                <div className="existing-record-info">
+                  <h4>Existing Record Details:</h4>
+                  <p><strong>Patient:</strong> {duplicateInfo.existingRecord.patientName}</p>
+                  {duplicateInfo.existingRecord.email && <p><strong>Email:</strong> {duplicateInfo.existingRecord.email}</p>}
+                  {duplicateInfo.existingRecord.idNumber && <p><strong>ID Number:</strong> {duplicateInfo.existingRecord.idNumber}</p>}
+                  <p><strong>Created:</strong> {new Date(duplicateInfo.existingRecord.createdAt).toLocaleDateString()}</p>
+                  <p><strong>Current Diagnosis:</strong> {duplicateInfo.existingRecord.diagnosis}</p>
+                </div>
+                <button
+                  type="button"
+                  className="edit-existing-btn"
+                  onClick={() => {
+                    const fullRecord = records.find(r => r.id === duplicateInfo.existingRecordId);
+                    if (fullRecord) {
+                      handleEditExistingRecord(fullRecord);
+                    }
+                  }}
+                >
+                  ✏️ Edit Existing Record Instead
+                </button>
+              </div>
+            )}
 
             <div className="modal-tabs">
               <button
@@ -717,11 +847,17 @@ function MedicalRecords() {
               )}
 
               <div className="modal-footer">
-                <button type="button" onClick={() => setShowModal(false)} className="cancel-btn">
+                <button type="button" onClick={() => {
+                  setShowModal(false);
+                  resetForm();
+                }} className="cancel-btn">
                   Cancel
                 </button>
                 <button type="submit" disabled={loading} className="submit-btn-modal">
-                  {loading ? 'Creating...' : '✓ Create Record'}
+                  {loading
+                    ? (isEditing ? 'Updating...' : 'Creating...')
+                    : (isEditing ? '✓ Update Record' : '✓ Create Record')
+                  }
                 </button>
               </div>
             </form>
@@ -857,6 +993,33 @@ function MedicalRecords() {
                 </div>
               </div>
 
+              {patientAppointments.length > 0 && (
+                <div className="info-section">
+                  <h3>📅 Appointment History</h3>
+                  <div className="appointments-list">
+                    {patientAppointments.map((apt) => (
+                      <div
+                        key={apt.id}
+                        className={`appointment-card ${apt.id === selectedRecord.appointmentId ? 'linked-appointment' : ''}`}
+                      >
+                        <div className="appointment-header">
+                          {apt.id === selectedRecord.appointmentId && (
+                            <span className="linked-badge">🔗 Linked Record</span>
+                          )}
+                          <span className="appointment-date">{apt.date}</span>
+                          <span className="appointment-time">{apt.time}</span>
+                        </div>
+                        <div className="appointment-details">
+                          <div><strong>Service:</strong> {apt.service}</div>
+                          {apt.email && <div><strong>Email:</strong> {apt.email}</div>}
+                          {apt.idNumber && <div><strong>ID Number:</strong> {apt.idNumber}</div>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {(selectedRecord.labResults || selectedRecord.xrayNotes) && (
                 <div className="info-section">
                   <h3>🔬 Test Results</h3>
@@ -890,6 +1053,9 @@ function MedicalRecords() {
             </div>
 
             <div className="modal-footer">
+              <button onClick={() => openEditModal(selectedRecord)} className="submit-btn-modal">
+                ✏️ Edit Record
+              </button>
               <button onClick={() => setViewModal(false)} className="cancel-btn">
                 Close
               </button>

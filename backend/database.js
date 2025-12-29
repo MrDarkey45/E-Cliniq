@@ -33,6 +33,7 @@ const createTables = () => {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
       dosage TEXT,
+      unit TEXT DEFAULT 'mg',
       quantity INTEGER NOT NULL,
       price REAL NOT NULL,
       createdAt TEXT NOT NULL,
@@ -69,11 +70,53 @@ const createTables = () => {
     )
   `);
 
+  // Users table for authentication
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS users (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      email TEXT UNIQUE NOT NULL,
+      password TEXT NOT NULL,
+      role TEXT NOT NULL CHECK(role IN ('nurse', 'doctor', 'admin', 'patient')),
+      name TEXT NOT NULL,
+      createdAt TEXT NOT NULL
+    )
+  `);
+
+  // Create indexes for better performance
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_appointments_date_time ON appointments(date, time);
+    CREATE INDEX IF NOT EXISTS idx_medical_records_idNumber ON medical_records(idNumber);
+    CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+  `);
+
   console.log('✅ Database tables created successfully');
+};
+
+// Seed default users
+const seedUsers = () => {
+  const users = [
+    { email: 'nurse@email.com', password: 'nursePassword123', role: 'nurse', name: 'Nurse User' },
+    { email: 'doctor@email.com', password: 'doctorPassword123', role: 'doctor', name: 'Dr. Smith' },
+    { email: 'admin@email.com', password: 'adminPassword123', role: 'admin', name: 'Admin User' },
+    { email: 'patient@email.com', password: 'patientPassword123', role: 'patient', name: 'John Doe' }
+  ];
+
+  const existingUsers = db.prepare('SELECT COUNT(*) as count FROM users').get();
+
+  if (existingUsers.count === 0) {
+    const stmt = db.prepare('INSERT INTO users (email, password, role, name, createdAt) VALUES (?, ?, ?, ?, ?)');
+
+    users.forEach(user => {
+      stmt.run(user.email, user.password, user.role, user.name, new Date().toISOString());
+    });
+
+    console.log('✅ Default users seeded successfully');
+  }
 };
 
 // Initialize database
 createTables();
+seedUsers();
 
 // ============ APPOINTMENT QUERIES ============
 
@@ -258,6 +301,69 @@ export const medicalRecordQueries = {
   delete: (id) => {
     const stmt = db.prepare('DELETE FROM medical_records WHERE id = ?');
     return stmt.run(id);
+  },
+
+  getByIdNumber: (idNumber) => {
+    return db.prepare('SELECT * FROM medical_records WHERE idNumber = ? ORDER BY createdAt DESC').all(idNumber);
+  },
+
+  getByEmail: (email) => {
+    return db.prepare('SELECT * FROM medical_records WHERE email = ? ORDER BY createdAt DESC').all(email);
+  },
+
+  getByIdNumberOrEmail: (idNumber, email) => {
+    if (idNumber && email) {
+      return db.prepare('SELECT * FROM medical_records WHERE idNumber = ? OR email = ? ORDER BY createdAt DESC')
+        .get(idNumber, email);
+    } else if (idNumber) {
+      return db.prepare('SELECT * FROM medical_records WHERE idNumber = ? ORDER BY createdAt DESC').get(idNumber);
+    } else if (email) {
+      return db.prepare('SELECT * FROM medical_records WHERE email = ? ORDER BY createdAt DESC').get(email);
+    }
+    return null;
+  },
+
+  getAppointmentsForPatient: (idNumber, email) => {
+    if (idNumber && email) {
+      return db.prepare('SELECT * FROM appointments WHERE idNumber = ? OR email = ? ORDER BY date DESC, time DESC')
+        .all(idNumber, email);
+    } else if (idNumber) {
+      return db.prepare('SELECT * FROM appointments WHERE idNumber = ? ORDER BY date DESC, time DESC').all(idNumber);
+    } else if (email) {
+      return db.prepare('SELECT * FROM appointments WHERE email = ? ORDER BY date DESC, time DESC').all(email);
+    }
+    return [];
+  }
+};
+
+// ============ USER QUERIES ============
+
+export const userQueries = {
+  getAll: () => {
+    return db.prepare('SELECT id, email, role, name, createdAt FROM users ORDER BY createdAt DESC').all();
+  },
+
+  getById: (id) => {
+    return db.prepare('SELECT id, email, role, name, createdAt FROM users WHERE id = ?').get(id);
+  },
+
+  getByEmail: (email) => {
+    return db.prepare('SELECT * FROM users WHERE email = ?').get(email);
+  },
+
+  create: (data) => {
+    const stmt = db.prepare(`
+      INSERT INTO users (email, password, role, name, createdAt)
+      VALUES (?, ?, ?, ?, ?)
+    `);
+    const result = stmt.run(
+      data.email,
+      data.password,
+      data.role,
+      data.name,
+      new Date().toISOString()
+    );
+    return userQueries.getById(result.lastInsertRowid);
   }
 };
 
