@@ -143,7 +143,7 @@ const suggestAlternativeTimes = (date) => {
 
 // Create new appointment (requires nurse or admin role)
 app.post('/api/appointments', authenticate, authorize(['nurse', 'admin']), (req, res) => {
-  const { date, time, clientName, email, idNumber, service } = req.body;
+  const { date, time, clientName, email, idNumber, age, gender, service } = req.body;
 
   if (!date || !time || !clientName || !service) {
     return res.status(400).json({ error: 'Date, time, client name, and service are required' });
@@ -174,6 +174,8 @@ app.post('/api/appointments', authenticate, authorize(['nurse', 'admin']), (req,
       clientName,
       email: email || null,
       idNumber: idNumber || null,
+      age: age || null,
+      gender: gender || null,
       service
     });
 
@@ -189,8 +191,8 @@ app.post('/api/appointments', authenticate, authorize(['nurse', 'admin']), (req,
           patientName: clientName,
           email: email || null,
           idNumber: idNumber || null,
-          age: null,
-          gender: null,
+          age: age || null,
+          gender: gender || null,
           symptoms: 'Scheduled appointment',
           diagnosis: 'Pending examination',
           treatment: 'To be determined',
@@ -263,25 +265,25 @@ app.get('/api/inventory', authenticate, (req, res) => {
 
 // Add new inventory item (requires nurse or admin role)
 app.post('/api/inventory', authenticate, authorize(['nurse', 'admin']), (req, res) => {
-  const { name, dosage, unit, quantity, price } = req.body;
-  
-  console.log('Received inventory data:', { name, dosage, unit, quantity, price });
-  
-  if (!name || quantity === undefined || price === undefined) {
-    return res.status(400).json({ error: 'Name, quantity, and price are required' });
+  const { name, dosage, unit, quantity } = req.body;
+
+  console.log('Received inventory data:', { name, dosage, unit, quantity });
+
+  if (!name || quantity === undefined) {
+    return res.status(400).json({ error: 'Name and quantity are required' });
   }
 
-  if (quantity < 0 || price < 0) {
-    return res.status(400).json({ error: 'Quantity and price must be positive' });
+  if (quantity < 0) {
+    return res.status(400).json({ error: 'Quantity must be positive' });
   }
 
   try {
-    const newItem = inventoryQueries.create({ 
-      name, 
+    const newItem = inventoryQueries.create({
+      name,
       dosage: dosage || '',
       unit: unit || 'mg',
-      quantity: parseInt(quantity), 
-      price: parseFloat(price) 
+      quantity: parseInt(quantity),
+      price: 0 // Default price to 0 since it's not required
     });
     console.log('Created item:', newItem);
     res.status(201).json(newItem);
@@ -294,8 +296,8 @@ app.post('/api/inventory', authenticate, authorize(['nurse', 'admin']), (req, re
 // Update inventory item (requires nurse or admin role)
 app.put('/api/inventory/:id', authenticate, authorize(['nurse', 'admin']), (req, res) => {
   const id = parseInt(req.params.id);
-  const { name, dosage, unit, quantity, price } = req.body;
-  
+  const { name, dosage, unit, quantity } = req.body;
+
   try {
     const item = inventoryQueries.getById(id);
     if (!item) {
@@ -303,14 +305,14 @@ app.put('/api/inventory/:id', authenticate, authorize(['nurse', 'admin']), (req,
     }
 
     // Check if it's a full update or just quantity
-    if (name || dosage !== undefined || unit !== undefined || price !== undefined) {
+    if (name || dosage !== undefined || unit !== undefined) {
       // Full update
       const updatedItem = inventoryQueries.update(id, {
         name: name || item.name,
         dosage: dosage !== undefined ? dosage : item.dosage,
         unit: unit !== undefined ? unit : (item.unit || 'mg'),
         quantity: quantity !== undefined ? parseInt(quantity) : item.quantity,
-        price: price !== undefined ? parseFloat(price) : item.price
+        price: item.price || 0 // Keep existing price or default to 0
       });
       res.json(updatedItem);
     } else if (quantity !== undefined) {
@@ -419,8 +421,9 @@ app.post('/api/medical-records', authenticate, authorize(['doctor', 'nurse']), (
         if (inventoryItem) {
           const newQuantity = inventoryItem.quantity - (med.quantity || 1);
           if (newQuantity < 0) {
+            const shortage = Math.abs(newQuantity);
             return res.status(400).json({
-              error: `Insufficient stock for ${inventoryItem.name}. Available: ${inventoryItem.quantity}, Required: ${med.quantity || 1}`
+              error: `Insufficient stock for ${inventoryItem.name}. Currently available: ${inventoryItem.quantity} units. Prescription requires: ${med.quantity || 1} units. Short by: ${shortage} units. Please restock or reduce prescription quantity.`
             });
           }
           inventoryQueries.update(med.id, { quantity: newQuantity });
@@ -548,8 +551,10 @@ app.put('/api/medical-records/:id', authenticate, authorize(['doctor', 'nurse'])
           if (inventoryItem) {
             const newQuantity = inventoryItem.quantity + quantityChange;
             if (newQuantity < 0) {
+              const shortage = Math.abs(newQuantity);
+              const additionalNeeded = Math.abs(quantityChange);
               return res.status(400).json({
-                error: `Insufficient stock for ${inventoryItem.name}. Available: ${inventoryItem.quantity}, Required: ${Math.abs(quantityChange)}`
+                error: `Insufficient stock for ${inventoryItem.name}. Currently available: ${inventoryItem.quantity} units. Additional units needed: ${additionalNeeded}. Short by: ${shortage} units. Please restock or reduce prescription quantity.`
               });
             }
             inventoryQueries.update(medId, { quantity: newQuantity });
