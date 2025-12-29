@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { medicalRecordsAPI, appointmentsAPI, inventoryAPI } from '../services/api';
+import { FaClipboardList, FaEdit, FaTrash, FaTimes, FaCheck, FaExclamationTriangle, FaEnvelope, FaIdCard, FaPills, FaPlus, FaCog, FaFileAlt, FaInfoCircle, FaLightbulb, FaCalendarAlt, FaUser, FaStethoscope, FaHeartbeat, FaMinus } from 'react-icons/fa';
 
 function MedicalRecords() {
   const [records, setRecords] = useState([]);
@@ -152,10 +153,10 @@ function MedicalRecords() {
             if (update.quantityChange > 0) {
               return `✅ ${update.medicineName}: Returned ${update.quantityChange} to stock (New Stock: ${update.newStock})`;
             } else {
-              return `📦 ${update.medicineName}: Dispensed ${Math.abs(update.quantityChange)} (New Stock: ${update.newStock})`;
+              return `${update.medicineName}: Dispensed ${Math.abs(update.quantityChange)} (New Stock: ${update.newStock})`;
             }
           }).join('\n');
-          alert(`💊 Inventory Updated:\n\n${updateMessages}`);
+          alert(`Inventory Updated:\n\n${updateMessages}`);
         }
       } else {
         // Create new record
@@ -170,9 +171,9 @@ function MedicalRecords() {
         if (response.inventoryUpdates && response.inventoryUpdates.length > 0) {
           console.log('Inventory updates:', response.inventoryUpdates);
           const updateMessages = response.inventoryUpdates.map(update =>
-            `📦 ${update.medicineName}: Dispensed ${update.quantityDeducted} (New Stock: ${update.newStock})`
+            `${update.medicineName}: Dispensed ${update.quantityDeducted} (New Stock: ${update.newStock})`
           ).join('\n');
-          alert(`💊 Prescription Dispensed!\n\n${updateMessages}`);
+          alert(`Prescription Dispensed!\n\n${updateMessages}`);
         }
       }
 
@@ -421,7 +422,7 @@ function MedicalRecords() {
       <div className="records-table-wrapper">
         {filteredRecords.length === 0 ? (
           <div className="empty-state-large">
-            <div className="empty-icon">📋</div>
+            <div className="empty-icon"><FaClipboardList size={64} color="#ccc" /></div>
             <h3>No medical records found</h3>
             <p>Click "New Medical Record" to create your first patient record</p>
           </div>
@@ -432,43 +433,43 @@ function MedicalRecords() {
                 <tr>
                   <th className="th-date">
                     <div className="th-content">
-                      <span className="th-icon">📅</span>
+                      <span className="th-icon"><FaCalendarAlt /></span>
                       <span>Date</span>
                     </div>
                   </th>
                   <th className="th-patient">
                     <div className="th-content">
-                      <span className="th-icon">👤</span>
+                      <span className="th-icon"><FaUser /></span>
                       <span>Patient Name</span>
                     </div>
                   </th>
                   <th className="th-contact">
                     <div className="th-content">
-                      <span className="th-icon">📧</span>
+                      <span className="th-icon"><FaEnvelope /></span>
                       <span>Contact</span>
                     </div>
                   </th>
                   <th className="th-demographics">
                     <div className="th-content">
-                      <span className="th-icon">ℹ️</span>
+                      <span className="th-icon"><FaInfoCircle /></span>
                       <span>Age/Gender</span>
                     </div>
                   </th>
                   <th className="th-diagnosis">
                     <div className="th-content">
-                      <span className="th-icon">🩺</span>
+                      <span className="th-icon"><FaStethoscope /></span>
                       <span>Diagnosis</span>
                     </div>
                   </th>
                   <th className="th-followup">
                     <div className="th-content">
-                      <span className="th-icon">📆</span>
+                      <span className="th-icon"><FaCalendarAlt /></span>
                       <span>Follow-up</span>
                     </div>
                   </th>
                   <th className="th-actions">
                     <div className="th-content">
-                      <span className="th-icon">⚙️</span>
+                      <span className="th-icon"><FaCog /></span>
                       <span>Actions</span>
                     </div>
                   </th>
@@ -494,8 +495,8 @@ function MedicalRecords() {
                       <div className="patient-info-cell">
                         <div className="patient-name-main">{record.patientName}</div>
                         <div className="patient-id-sub">
-                          {record.idNumber && <span className="id-badge">🆔 {record.idNumber}</span>}
-                          {record.allergies && <span className="allergy-warning" title={record.allergies}>⚠️ Allergies</span>}
+                          {record.idNumber && <span className="id-badge"><FaIdCard style={{ marginRight: '4px' }} /> {record.idNumber}</span>}
+                          {record.allergies && <span className="allergy-warning" title={record.allergies}><FaExclamationTriangle style={{ marginRight: '4px' }} /> Allergies</span>}
                         </div>
                       </div>
                     </td>
@@ -538,7 +539,7 @@ function MedicalRecords() {
                           className="action-btn edit-btn"
                           title="Edit record"
                         >
-                          <span className="btn-icon">✏️</span>
+                          <span className="btn-icon"><FaEdit /></span>
                           <span className="btn-text">Edit</span>
                         </button>
                         <button
@@ -549,7 +550,7 @@ function MedicalRecords() {
                           className="action-btn delete-btn"
                           title="Delete record"
                         >
-                          <span className="btn-icon">🗑️</span>
+                          <span className="btn-icon"><FaTrash /></span>
                           <span className="btn-text">Delete</span>
                         </button>
                       </div>
@@ -567,17 +568,17 @@ function MedicalRecords() {
         <div className="modal-overlay" onClick={() => setShowModal(false)}>
           <div className="modal-container modal-large" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h2>{isEditing ? '✏️ Edit Medical Record' : '📝 New Medical Record'}</h2>
+              <h2>{isEditing ? <><FaEdit style={{ marginRight: '8px' }} /> Edit Medical Record</> : <><FaFileAlt style={{ marginRight: '8px' }} /> New Medical Record</>}</h2>
               <button onClick={() => {
                 setShowModal(false);
                 resetForm();
-              }} className="modal-close-btn">✕</button>
+              }} className="modal-close-btn"><FaTimes /></button>
             </div>
 
             {/* Duplicate Warning */}
             {duplicateInfo && duplicateInfo.existingRecord && (
               <div className="duplicate-warning">
-                <h3>⚠️ Duplicate Record Detected</h3>
+                <h3><FaExclamationTriangle style={{ marginRight: '8px' }} /> Duplicate Record Detected</h3>
                 <p>{duplicateInfo.message}</p>
                 <div className="existing-record-info">
                   <h4>Existing Record Details:</h4>
@@ -597,7 +598,7 @@ function MedicalRecords() {
                     }
                   }}
                 >
-                  ✏️ Edit Existing Record Instead
+                  <FaEdit style={{ marginRight: '6px' }} /> Edit Existing Record Instead
                 </button>
               </div>
             )}
@@ -607,25 +608,25 @@ function MedicalRecords() {
                 className={modalTab === 'basic' ? 'tab-btn active' : 'tab-btn'}
                 onClick={() => setModalTab('basic')}
               >
-                👤 Basic Info
+                <FaUser style={{ marginRight: '6px' }} /> Basic Info
               </button>
               <button
                 className={modalTab === 'clinical' ? 'tab-btn active' : 'tab-btn'}
                 onClick={() => setModalTab('clinical')}
               >
-                🩺 Clinical
+                <FaStethoscope style={{ marginRight: '6px' }} /> Clinical
               </button>
               <button
                 className={modalTab === 'prescription' ? 'tab-btn active' : 'tab-btn'}
                 onClick={() => setModalTab('prescription')}
               >
-                💊 Prescription
+                <FaPills style={{ marginRight: '6px' }} /> Prescription
               </button>
               <button
                 className={modalTab === 'vitals' ? 'tab-btn active' : 'tab-btn'}
                 onClick={() => setModalTab('vitals')}
               >
-                💓 Vitals
+                <FaHeartbeat style={{ marginRight: '6px' }} /> Vitals
               </button>
               <button
                 className={modalTab === 'additional' ? 'tab-btn active' : 'tab-btn'}
@@ -638,24 +639,6 @@ function MedicalRecords() {
             <form onSubmit={handleSubmit} className="modal-form">
               {modalTab === 'basic' && (
                 <div className="tab-content">
-                  <div className="form-row">
-                    <div className="form-group-modal">
-                      <label>Link to Appointment (Optional)</label>
-                      <select
-                        name="appointmentId"
-                        value={formData.appointmentId}
-                        onChange={handleAppointmentSelect}
-                      >
-                        <option value="">-- Select Appointment --</option>
-                        {appointments.map((apt) => (
-                          <option key={apt.id} value={apt.id}>
-                            {apt.clientName} - {apt.date} {apt.time}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-
                   <div className="form-row">
                     <div className="form-group-modal">
                       <label>Patient Name *</label>
@@ -777,7 +760,7 @@ function MedicalRecords() {
                     {/* Left Column - Available Medicines */}
                     <div className="available-medicines-section">
                       <div className="section-header-compact">
-                        <h4>💊 Available Medicines</h4>
+                        <h4><FaPills style={{ marginRight: '6px' }} /> Available Medicines</h4>
                         <span className="medicine-count-badge">
                           {inventory.filter(med => med.quantity > 0).length} available
                         </span>
@@ -786,7 +769,7 @@ function MedicalRecords() {
                       <div className="search-bar-container">
                         <input
                           type="text"
-                          placeholder="🔍 Search medicines..."
+                          placeholder="Search medicines..."
                           className="medicine-search-input"
                           value={medicineSearch}
                           onChange={(e) => setMedicineSearch(e.target.value)}
@@ -796,7 +779,7 @@ function MedicalRecords() {
                       {/* Low Stock Warning */}
                       {inventory.filter(med => med.quantity > 0 && med.quantity < 10).length > 0 && (
                         <div className="low-stock-warning">
-                          ⚠️ {inventory.filter(med => med.quantity > 0 && med.quantity < 10).length} medicine(s) low on stock
+                          <FaExclamationTriangle style={{ marginRight: '6px' }} /> {inventory.filter(med => med.quantity > 0 && med.quantity < 10).length} medicine(s) low on stock
                         </div>
                       )}
 
@@ -826,7 +809,7 @@ function MedicalRecords() {
                                 className="add-btn-compact"
                                 title="Add to prescription"
                               >
-                                +
+                                <FaPlus />
                               </button>
                             </div>
                           ))}
@@ -845,7 +828,7 @@ function MedicalRecords() {
                     {/* Right Column - Prescribed Medicines */}
                     <div className="prescribed-medicines-section">
                       <div className="section-header-compact">
-                        <h4>📋 Prescribed ({formData.prescribedMedicines.length})</h4>
+                        <h4><FaClipboardList style={{ marginRight: '6px' }} /> Prescribed ({formData.prescribedMedicines.length})</h4>
                       </div>
 
                       {formData.prescribedMedicines.length === 0 ? (
@@ -866,7 +849,7 @@ function MedicalRecords() {
                                     onClick={() => updateMedicineQuantity(med.id, Math.max(1, parseInt(med.quantity || 1) - 1))}
                                     className="qty-btn-compact"
                                   >
-                                    −
+                                    <FaMinus />
                                   </button>
                                   <input
                                     type="number"
@@ -880,7 +863,7 @@ function MedicalRecords() {
                                     onClick={() => updateMedicineQuantity(med.id, parseInt(med.quantity || 1) + 1)}
                                     className="qty-btn-compact"
                                   >
-                                    +
+                                    <FaPlus />
                                   </button>
                                 </div>
                               </div>
@@ -890,7 +873,7 @@ function MedicalRecords() {
                                 className="remove-btn-compact"
                                 title="Remove"
                               >
-                                ✕
+                                <FaTimes />
                               </button>
                             </div>
                           ))}
@@ -950,7 +933,7 @@ function MedicalRecords() {
                   </div>
 
                   <div className="info-box">
-                    <strong>💡 Tip:</strong> Record vital signs at the time of examination for accurate medical history.
+                    <strong><FaLightbulb style={{ marginRight: '6px' }} /> Tip:</strong> Record vital signs at the time of examination for accurate medical history.
                   </div>
                 </div>
               )}
@@ -991,9 +974,9 @@ function MedicalRecords() {
                   </div>
 
                   <div className="form-group-modal">
-                    <label>Follow-up Date</label>
+                    <label>Follow-up Date & Time</label>
                     <input
-                      type="date"
+                      type="datetime-local"
                       name="followUpDate"
                       value={formData.followUpDate}
                       onChange={handleChange}
@@ -1012,7 +995,7 @@ function MedicalRecords() {
                 <button type="submit" disabled={loading} className="submit-btn-modal">
                   {loading
                     ? (isEditing ? 'Updating...' : 'Creating...')
-                    : (isEditing ? '✓ Update Record' : '✓ Create Record')
+                    : (isEditing ? <><FaCheck style={{ marginRight: '6px' }} /> Update Record</> : <><FaCheck style={{ marginRight: '6px' }} /> Create Record</>)
                   }
                 </button>
               </div>
@@ -1027,15 +1010,15 @@ function MedicalRecords() {
           <div className="modal-container view-modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <div>
-                <h2>📋 Medical Record</h2>
+                <h2><FaClipboardList style={{ marginRight: '8px' }} /> Medical Record</h2>
                 <p className="patient-name-header">{selectedRecord.patientName}</p>
               </div>
-              <button onClick={() => setViewModal(false)} className="modal-close-btn">✕</button>
+              <button onClick={() => setViewModal(false)} className="modal-close-btn"><FaTimes /></button>
             </div>
 
             <div className="view-content">
               <div className="info-section">
-                <h3>👤 Basic Information</h3>
+                <h3><FaUser style={{ marginRight: '8px' }} /> Basic Information</h3>
                 <div className="info-grid">
                   <div className="info-item">
                     <span className="info-label">Patient:</span>
@@ -1210,7 +1193,7 @@ function MedicalRecords() {
 
             <div className="modal-footer">
               <button onClick={() => openEditModal(selectedRecord)} className="submit-btn-modal">
-                ✏️ Edit Record
+                <FaEdit style={{ marginRight: '6px' }} /> Edit Record
               </button>
               <button onClick={() => setViewModal(false)} className="cancel-btn">
                 Close
