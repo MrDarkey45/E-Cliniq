@@ -38,6 +38,7 @@ function MedicalRecords() {
   const [patientAppointments, setPatientAppointments] = useState([]);
   const [isEditing, setIsEditing] = useState(false);
   const [editingRecordId, setEditingRecordId] = useState(null);
+  const [medicineSearch, setMedicineSearch] = useState('');
 
   useEffect(() => {
     fetchRecords();
@@ -132,37 +133,42 @@ function MedicalRecords() {
 
       console.log('Sending medical record data:', dataToSend);
 
-      let savedRecord;
+      let response;
       if (isEditing && editingRecordId) {
         // Update existing record
-        savedRecord = await medicalRecordsAPI.update(editingRecordId, dataToSend);
-        console.log('Updated record:', savedRecord);
+        response = await medicalRecordsAPI.update(editingRecordId, dataToSend);
+        console.log('Updated record:', response);
 
         // Update the record in the list
+        const updatedRecord = response.record || response;
         setRecords(records.map(record =>
-          record.id === editingRecordId ? savedRecord : record
+          record.id === editingRecordId ? updatedRecord : record
         ));
+
+        // Show inventory updates if any
+        if (response.inventoryUpdates && response.inventoryUpdates.length > 0) {
+          console.log('Inventory updates:', response.inventoryUpdates);
+          const updateMessages = response.inventoryUpdates.map(update =>
+            `${update.medicineName}: ${update.quantityChange > 0 ? '+' : ''}${update.quantityChange} (Stock: ${update.newStock})`
+          ).join('\n');
+          alert(`Inventory Updated:\n${updateMessages}`);
+        }
       } else {
         // Create new record
-        savedRecord = await medicalRecordsAPI.create(dataToSend);
-        console.log('Created record:', savedRecord);
+        response = await medicalRecordsAPI.create(dataToSend);
+        console.log('Created record:', response);
 
         // Add new record to the list
-        setRecords([...records, savedRecord]);
-      }
+        const newRecord = response.record || response;
+        setRecords([...records, newRecord]);
 
-      // Deduct prescribed medicines from inventory (only when creating new record)
-      if (!isEditing) {
-        for (const med of formData.prescribedMedicines) {
-          try {
-            const inventoryItem = inventory.find(item => item.id === med.id);
-            if (inventoryItem) {
-              const newQuantity = inventoryItem.quantity - med.quantity;
-              await inventoryAPI.update(med.id, { quantity: Math.max(0, newQuantity) });
-            }
-          } catch (err) {
-            console.error(`Failed to update inventory for ${med.name}:`, err);
-          }
+        // Show inventory updates if any
+        if (response.inventoryUpdates && response.inventoryUpdates.length > 0) {
+          console.log('Inventory updates:', response.inventoryUpdates);
+          const updateMessages = response.inventoryUpdates.map(update =>
+            `${update.medicineName}: -${update.quantityDeducted} (Stock: ${update.newStock})`
+          ).join('\n');
+          alert(`Prescription dispensed! Inventory Updated:\n${updateMessages}`);
         }
       }
 
@@ -172,8 +178,13 @@ function MedicalRecords() {
       // Refresh inventory to show updated quantities
       fetchInventory();
     } catch (err) {
+      // Check if this is an insufficient stock error
+      if (err.message.includes('Insufficient stock')) {
+        setError(err.message);
+        alert(`❌ ${err.message}\n\nPlease adjust the prescription quantities or restock inventory.`);
+      }
       // Check if this is a duplicate error (409)
-      if (err.message.includes('Record exists for this patient')) {
+      else if (err.message.includes('Record exists for this patient')) {
         // Try to get the duplicate details from the API
         try {
           const response = await fetch('http://localhost:3001/api/medical-records', {
@@ -403,7 +414,7 @@ function MedicalRecords() {
         </div>
       </div>
 
-      <div className="records-table-container">
+      <div className="records-table-wrapper">
         {filteredRecords.length === 0 ? (
           <div className="empty-state-large">
             <div className="empty-icon">📋</div>
@@ -411,71 +422,139 @@ function MedicalRecords() {
             <p>Click "New Medical Record" to create your first patient record</p>
           </div>
         ) : (
-          <table className="records-table">
-            <thead>
-              <tr>
-                <th>Date</th>
-                <th>Patient Name</th>
-                <th>Email</th>
-                <th>ID Number</th>
-                <th>Age</th>
-                <th>Gender</th>
-                <th>Diagnosis</th>
-                <th>Follow-up</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredRecords.map((record) => (
-                <tr key={record.id} onClick={() => openViewModal(record)} className="clickable-row">
-                  <td className="date-cell">{new Date(record.createdAt).toLocaleDateString()}</td>
-                  <td className="patient-name-cell">
-                    <strong>{record.patientName}</strong>
-                    {record.allergies && <span className="allergy-badge" title={record.allergies}>⚠️</span>}
-                  </td>
-                  <td className="email-cell">{record.email || '—'}</td>
-                  <td className="id-cell">{record.idNumber || '—'}</td>
-                  <td className="age-cell">{record.age || '—'}</td>
-                  <td className="gender-cell">{record.gender || '—'}</td>
-                  <td className="diagnosis-cell">
-                    <div className="diagnosis-content">
-                      <span className="diagnosis-icon">
-                        {record.diagnosis ? '📋' : '📄'}
-                      </span>
-                      <span className="diagnosis-text">{record.diagnosis}</span>
+          <div className="modern-table-container">
+            <table className="modern-records-table">
+              <thead>
+                <tr>
+                  <th className="th-date">
+                    <div className="th-content">
+                      <span className="th-icon">📅</span>
+                      <span>Date</span>
                     </div>
-                  </td>
-                  <td className="followup-cell">
-                    {record.followUpDate ? (
-                      <span className="follow-up-badge">{record.followUpDate}</span>
-                    ) : (
-                      <span className="no-followup">—</span>
-                    )}
-                  </td>
-                  <td className="actions-cell">
-                    <button onClick={(e) => {
-                        e.stopPropagation();
-                        openEditModal(record);
-                      }}
-                      className="edit-btn-icon"
-                      title="Edit record"
-                    >
-                      ✏️
-                    </button>
-                    <button onClick={(e) => {
-                        e.stopPropagation();
-                        handleDelete(record.id);
-                      }}
-                      className="delete-btn-icon"
-                      title="Delete record"
-                    >
-                      🗑️
-                    </button>
-                  </td>
+                  </th>
+                  <th className="th-patient">
+                    <div className="th-content">
+                      <span className="th-icon">👤</span>
+                      <span>Patient Name</span>
+                    </div>
+                  </th>
+                  <th className="th-contact">
+                    <div className="th-content">
+                      <span className="th-icon">📧</span>
+                      <span>Contact</span>
+                    </div>
+                  </th>
+                  <th className="th-demographics">
+                    <div className="th-content">
+                      <span className="th-icon">ℹ️</span>
+                      <span>Age/Gender</span>
+                    </div>
+                  </th>
+                  <th className="th-diagnosis">
+                    <div className="th-content">
+                      <span className="th-icon">🩺</span>
+                      <span>Diagnosis</span>
+                    </div>
+                  </th>
+                  <th className="th-followup">
+                    <div className="th-content">
+                      <span className="th-icon">📆</span>
+                      <span>Follow-up</span>
+                    </div>
+                  </th>
+                  <th className="th-actions">
+                    <div className="th-content">
+                      <span className="th-icon">⚙️</span>
+                      <span>Actions</span>
+                    </div>
+                  </th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {filteredRecords.map((record, index) => (
+                  <tr
+                    key={record.id}
+                    onClick={() => openViewModal(record)}
+                    className="table-row"
+                    style={{ animationDelay: `${index * 0.05}s` }}
+                  >
+                    <td className="td-date">
+                      <div className="date-badge">
+                        <div className="date-day">{new Date(record.createdAt).getDate()}</div>
+                        <div className="date-month">
+                          {new Date(record.createdAt).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
+                        </div>
+                      </div>
+                    </td>
+                    <td className="td-patient">
+                      <div className="patient-info-cell">
+                        <div className="patient-name-main">{record.patientName}</div>
+                        <div className="patient-id-sub">
+                          {record.idNumber && <span className="id-badge">🆔 {record.idNumber}</span>}
+                          {record.allergies && <span className="allergy-warning" title={record.allergies}>⚠️ Allergies</span>}
+                        </div>
+                      </div>
+                    </td>
+                    <td className="td-contact">
+                      <div className="contact-info">
+                        {record.email ? (
+                          <span className="email-display">{record.email}</span>
+                        ) : (
+                          <span className="no-data">No email</span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="td-demographics">
+                      <div className="demographics-cell">
+                        <span className="age-badge">{record.age || '—'} yrs</span>
+                        <span className="gender-badge">{record.gender || '—'}</span>
+                      </div>
+                    </td>
+                    <td className="td-diagnosis">
+                      <div className="diagnosis-pill">
+                        {record.diagnosis}
+                      </div>
+                    </td>
+                    <td className="td-followup">
+                      {record.followUpDate ? (
+                        <span className="followup-badge-new">
+                          {new Date(record.followUpDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                        </span>
+                      ) : (
+                        <span className="no-followup-new">—</span>
+                      )}
+                    </td>
+                    <td className="td-actions">
+                      <div className="action-buttons">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openEditModal(record);
+                          }}
+                          className="action-btn edit-btn"
+                          title="Edit record"
+                        >
+                          <span className="btn-icon">✏️</span>
+                          <span className="btn-text">Edit</span>
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDelete(record.id);
+                          }}
+                          className="action-btn delete-btn"
+                          title="Delete record"
+                        >
+                          <span className="btn-icon">🗑️</span>
+                          <span className="btn-text">Delete</span>
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
 
@@ -689,62 +768,135 @@ function MedicalRecords() {
               )}
 
               {modalTab === 'prescription' && (
-                <div className="tab-content">
-                  <h4>Available Medicines in Stock</h4>
-                  <div className="medicine-selector">
-                    {inventory.filter(med => med.quantity > 0).map((medicine) => (
-                      <div key={medicine.id} className="medicine-item">
-                        <div className="medicine-info">
-                          <strong>{medicine.name}</strong>
-                          <span className="medicine-dosage">{medicine.dosage} {medicine.unit}</span>
-                          <span className="medicine-stock">Stock: {medicine.quantity}</span>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => handleMedicineSelect(medicine)}
-                          className="add-medicine-btn"
-                        >
-                          + Add
-                        </button>
+                <div className="tab-content prescription-tab-compact">
+                  <div className="prescription-layout">
+                    {/* Left Column - Available Medicines */}
+                    <div className="available-medicines-section">
+                      <div className="section-header-compact">
+                        <h4>💊 Available Medicines</h4>
+                        <span className="medicine-count-badge">
+                          {inventory.filter(med => med.quantity > 0).length} available
+                        </span>
                       </div>
-                    ))}
+
+                      <div className="search-bar-container">
+                        <input
+                          type="text"
+                          placeholder="🔍 Search medicines..."
+                          className="medicine-search-input"
+                          value={medicineSearch}
+                          onChange={(e) => setMedicineSearch(e.target.value)}
+                        />
+                      </div>
+
+                      {/* Low Stock Warning */}
+                      {inventory.filter(med => med.quantity > 0 && med.quantity < 10).length > 0 && (
+                        <div className="low-stock-warning">
+                          ⚠️ {inventory.filter(med => med.quantity > 0 && med.quantity < 10).length} medicine(s) low on stock
+                        </div>
+                      )}
+
+                      <div className="medicine-list-compact">
+                        {inventory
+                          .filter(med => med.quantity > 0)
+                          .filter(med =>
+                            medicineSearch === '' ||
+                            med.name.toLowerCase().includes(medicineSearch.toLowerCase()) ||
+                            med.dosage.toLowerCase().includes(medicineSearch.toLowerCase())
+                          )
+                          .map((medicine) => (
+                            <div key={medicine.id} className="medicine-row-compact">
+                              <div className="medicine-info-compact">
+                                <div className="medicine-name-compact">{medicine.name}</div>
+                                <div className="medicine-details-compact">
+                                  <span className="dosage-text">{medicine.dosage} {medicine.unit}</span>
+                                  <span className="separator">•</span>
+                                  <span className={`stock-text ${medicine.quantity < 10 ? 'low' : medicine.quantity < 30 ? 'medium' : 'high'}`}>
+                                    {medicine.quantity} in stock
+                                  </span>
+                                </div>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => handleMedicineSelect(medicine)}
+                                className="add-btn-compact"
+                                title="Add to prescription"
+                              >
+                                +
+                              </button>
+                            </div>
+                          ))}
+                        {inventory.filter(med => med.quantity > 0).filter(med =>
+                          medicineSearch === '' ||
+                          med.name.toLowerCase().includes(medicineSearch.toLowerCase()) ||
+                          med.dosage.toLowerCase().includes(medicineSearch.toLowerCase())
+                        ).length === 0 && (
+                          <div className="no-results">
+                            <p>No medicines found matching "{medicineSearch}"</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Right Column - Prescribed Medicines */}
+                    <div className="prescribed-medicines-section">
+                      <div className="section-header-compact">
+                        <h4>📋 Prescribed ({formData.prescribedMedicines.length})</h4>
+                      </div>
+
+                      {formData.prescribedMedicines.length === 0 ? (
+                        <div className="empty-prescribed-compact">
+                          <div className="empty-icon">📭</div>
+                          <p>No medicines prescribed</p>
+                        </div>
+                      ) : (
+                        <div className="prescribed-list-compact">
+                          {formData.prescribedMedicines.map((med) => (
+                            <div key={med.id} className="prescribed-row-compact">
+                              <div className="prescribed-info-compact">
+                                <div className="prescribed-name-compact">{med.name}</div>
+                                <div className="prescribed-dosage-compact">{med.dosage} {med.unit}</div>
+                                <div className="quantity-control-compact">
+                                  <button
+                                    type="button"
+                                    onClick={() => updateMedicineQuantity(med.id, Math.max(1, parseInt(med.quantity || 1) - 1))}
+                                    className="qty-btn-compact"
+                                  >
+                                    −
+                                  </button>
+                                  <input
+                                    type="number"
+                                    value={med.quantity}
+                                    onChange={(e) => updateMedicineQuantity(med.id, e.target.value)}
+                                    min="1"
+                                    className="qty-input-compact"
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => updateMedicineQuantity(med.id, parseInt(med.quantity || 1) + 1)}
+                                    className="qty-btn-compact"
+                                  >
+                                    +
+                                  </button>
+                                </div>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => removePrescribedMedicine(med.id)}
+                                className="remove-btn-compact"
+                                title="Remove"
+                              >
+                                ✕
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   </div>
 
-                  <h4 style={{ marginTop: '20px' }}>Prescribed Medicines</h4>
-                  {formData.prescribedMedicines.length === 0 ? (
-                    <p className="empty-prescription">No medicines prescribed yet</p>
-                  ) : (
-                    <div className="prescribed-list">
-                      {formData.prescribedMedicines.map((med) => (
-                        <div key={med.id} className="prescribed-item">
-                          <div className="prescribed-info">
-                            <strong>{med.name}</strong>
-                            <span>{med.dosage} {med.unit}</span>
-                          </div>
-                          <div className="prescribed-controls">
-                            <label>Quantity:</label>
-                            <input
-                              type="number"
-                              value={med.quantity}
-                              onChange={(e) => updateMedicineQuantity(med.id, e.target.value)}
-                              min="1"
-                              className="quantity-input-small"
-                            />
-                            <button
-                              type="button"
-                              onClick={() => removePrescribedMedicine(med.id)}
-                              className="remove-medicine-btn"
-                            >
-                              ✕
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  <div className="form-group-modal" style={{ marginTop: '20px' }}>
-                    <label>Additional Medication Notes</label>
+                  <div className="medication-notes-compact">
+                    <label>📝 Medication Notes</label>
                     <textarea
                       name="medications"
                       value={formData.medications}
