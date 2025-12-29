@@ -256,29 +256,6 @@ E-Cliniq/
 - Field format validation
 - Data type enforcement
 
-## Future Enhancements
-
-- [ ] Password encryption with bcrypt
-- [ ] Email notifications for appointments
-- [ ] Patient portal for self-service appointment booking
-- [ ] Report generation and analytics
-- [ ] Export functionality (PDF, CSV)
-- [ ] Advanced search and filtering
-- [ ] Appointment rescheduling
-- [ ] Multi-clinic support
-- [ ] Insurance integration
-- [ ] Billing module
-
-## Contributing
-
-Contributions are welcome! Please follow these steps:
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
-
 ## License
 
 This project is licensed under the MIT License.
