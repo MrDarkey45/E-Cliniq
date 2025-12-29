@@ -160,12 +160,21 @@ function AppointmentScheduler() {
     const year = currentMonth.getFullYear();
     const month = currentMonth.getMonth();
 
-    // Get first and last day of month
+    // Get first day of month and its day of week (0 = Sunday, 6 = Saturday)
     const firstDay = new Date(year, month, 1);
+    const firstDayOfWeek = firstDay.getDay();
+
+    // Get last day of month
     const lastDay = new Date(year, month + 1, 0);
+    const totalDays = lastDay.getDate();
+
+    // Add empty slots for days before the first day of the month
+    for (let i = 0; i < firstDayOfWeek; i++) {
+      days.push(null);
+    }
 
     // Generate all days in the month
-    for (let day = 1; day <= lastDay.getDate(); day++) {
+    for (let day = 1; day <= totalDays; day++) {
       const date = new Date(year, month, day);
       days.push(date.toISOString().split('T')[0]);
     }
@@ -328,10 +337,26 @@ function AppointmentScheduler() {
         📅 Today
       </button>
     </div>
-    <div className="calendar-grid">
 
+    {/* Weekday Headers */}
+    <div className="calendar-weekdays">
+      <div className="weekday-header">Sun</div>
+      <div className="weekday-header">Mon</div>
+      <div className="weekday-header">Tue</div>
+      <div className="weekday-header">Wed</div>
+      <div className="weekday-header">Thu</div>
+      <div className="weekday-header">Fri</div>
+      <div className="weekday-header">Sat</div>
+    </div>
+
+    <div className="calendar-grid">
       {/* Render grid of calendar days */}
-      {calendarDays.map((date) => {
+      {calendarDays.map((date, index) => {
+        // Handle empty cells for days before the first day of the month
+        if (date === null) {
+          return <div key={`empty-${index}`} className="calendar-day empty"></div>;
+        }
+
         const dayAppointments = groupedAppointments[date] || [];
         const count = dayAppointments.length;
         const isToday = new Date(date).toDateString() === new Date().toDateString();
@@ -450,23 +475,58 @@ function AppointmentScheduler() {
         </div>
       )}
 
-      {/* Modal for Appointment Details */}
+      {/* Enhanced Modal for Appointment Details */}
       {modalOpen && (
         <div className="modal-overlay" onClick={closeModal}>
-          <div className="modal-content">
-            <h3>📅 Appointments for {selectedDate}</h3>
-            {appointmentsForDate.length === 0 ? (
-              <p>No appointments scheduled for this date.</p>
-            ) : (
-              <ul>
-                {appointmentsForDate.map((apt) => (
-                  <li key={apt.id}>
-                    <strong>{apt.clientName}</strong> — {apt.date} at {apt.time} — {apt.service}
-                  </li>
-                ))}
-              </ul>
-            )}
-            <button onClick={closeModal} className="close-btn">X</button>
+          <div className="modal-content appointment-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header-appointments">
+              <div className="modal-date-display">
+                <div className="date-icon">📅</div>
+                <div className="date-info">
+                  <h2>{new Date(selectedDate).toLocaleDateString('en-US', { weekday: 'long' })}</h2>
+                  <p>{new Date(selectedDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</p>
+                </div>
+              </div>
+              <button onClick={closeModal} className="modal-close-btn">✕</button>
+            </div>
+
+            <div className="modal-body-appointments">
+              {appointmentsForDate.length === 0 ? (
+                <div className="no-appointments-message">
+                  <div className="empty-icon">📭</div>
+                  <h3>No Appointments Scheduled</h3>
+                  <p>There are no appointments for this date.</p>
+                </div>
+              ) : (
+                <div className="appointments-list-modal">
+                  <div className="appointments-count">
+                    {appointmentsForDate.length} {appointmentsForDate.length === 1 ? 'Appointment' : 'Appointments'}
+                  </div>
+                  {appointmentsForDate
+                    .sort((a, b) => a.time.localeCompare(b.time))
+                    .map((apt) => (
+                      <div key={apt.id} className="appointment-card-modal">
+                        <div className="appointment-time-badge">{apt.time}</div>
+                        <div className="appointment-details-modal">
+                          <h4>{apt.clientName}</h4>
+                          <div className="appointment-meta">
+                            <span className="service-tag">💼 {apt.service}</span>
+                            {apt.email && <span className="contact-info">📧 {apt.email}</span>}
+                            {apt.idNumber && <span className="contact-info">🆔 {apt.idNumber}</span>}
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => handleDelete(apt.id)}
+                          className="delete-btn-modal"
+                          title="Delete appointment"
+                        >
+                          🗑️
+                        </button>
+                      </div>
+                    ))}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}

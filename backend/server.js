@@ -372,7 +372,7 @@ app.post('/api/medical-records', authenticate, authorize(['doctor', 'nurse']), (
   const {
     appointmentId, patientName, age, gender, email, idNumber, diagnosis, symptoms, treatment,
     medications, allergies, bloodPressure, heartRate, temperature,
-    notes, followUpDate, labResults, xrayNotes
+    notes, followUpDate, labResults, xrayNotes, prescribedMedicines
   } = req.body;
 
   if (!patientName || !diagnosis || !symptoms || !treatment) {
@@ -402,27 +402,64 @@ app.post('/api/medical-records', authenticate, authorize(['doctor', 'nurse']), (
       }
     }
 
+    // Deduct prescribed medicines from inventory
+    const inventoryUpdates = [];
+    if (prescribedMedicines) {
+      let prescribedMedsArray = [];
+      try {
+        prescribedMedsArray = typeof prescribedMedicines === 'string'
+          ? JSON.parse(prescribedMedicines)
+          : prescribedMedicines;
+      } catch (err) {
+        console.error('Error parsing prescribedMedicines:', err);
+      }
+
+      for (const med of prescribedMedsArray) {
+        const inventoryItem = inventoryQueries.getById(med.id);
+        if (inventoryItem) {
+          const newQuantity = inventoryItem.quantity - (med.quantity || 1);
+          if (newQuantity < 0) {
+            return res.status(400).json({
+              error: `Insufficient stock for ${inventoryItem.name}. Available: ${inventoryItem.quantity}, Required: ${med.quantity || 1}`
+            });
+          }
+          inventoryQueries.update(med.id, { quantity: newQuantity });
+          inventoryUpdates.push({
+            medicineId: med.id,
+            medicineName: inventoryItem.name,
+            quantityDeducted: med.quantity || 1,
+            newStock: newQuantity
+          });
+        }
+      }
+    }
+
     const newRecord = medicalRecordQueries.create({
-      appointmentId, 
-      patientName, 
-      age, 
-      gender, 
-      email: email || null,           // ✅ Added email
-      idNumber: idNumber || null,     // ✅ Added idNumber
-      diagnosis, 
-      symptoms, 
+      appointmentId,
+      patientName,
+      age,
+      gender,
+      email: email || null,
+      idNumber: idNumber || null,
+      diagnosis,
+      symptoms,
       treatment,
-      medications, 
-      allergies, 
-      bloodPressure, 
-      heartRate, 
+      medications,
+      prescribedMedicines,
+      allergies,
+      bloodPressure,
+      heartRate,
       temperature,
-      notes, 
-      followUpDate, 
-      labResults, 
+      notes,
+      followUpDate,
+      labResults,
       xrayNotes
     });
-    res.status(201).json(newRecord);
+
+    res.status(201).json({
+      record: newRecord,
+      inventoryUpdates: inventoryUpdates
+    });
   } catch (err) {
     console.error('Error creating medical record:', err);
     res.status(500).json({ error: 'Failed to create medical record' });
@@ -457,22 +494,88 @@ app.get('/api/medical-records/:id', authenticate, authorizePatientRecords, (req,
 app.put('/api/medical-records/:id', authenticate, authorize(['doctor', 'nurse']), (req, res) => {
   const id = parseInt(req.params.id);
   const data = req.body;
-  
+
   try {
     const record = medicalRecordQueries.getById(id);
     if (!record) {
       return res.status(404).json({ error: 'Medical record not found' });
     }
 
+    // Handle inventory updates if prescribedMedicines changed
+    const inventoryUpdates = [];
+    if (data.prescribedMedicines) {
+      // Parse old and new prescribed medicines
+      let oldMeds = [];
+      let newMeds = [];
+
+      try {
+        oldMeds = record.prescribedMedicines
+          ? (typeof record.prescribedMedicines === 'string'
+              ? JSON.parse(record.prescribedMedicines)
+              : record.prescribedMedicines)
+          : [];
+      } catch (err) {
+        console.error('Error parsing old prescribedMedicines:', err);
+      }
+
+      try {
+        newMeds = typeof data.prescribedMedicines === 'string'
+          ? JSON.parse(data.prescribedMedicines)
+          : data.prescribedMedicines;
+      } catch (err) {
+        console.error('Error parsing new prescribedMedicines:', err);
+      }
+
+      // Calculate the difference in quantities
+      const quantityChanges = new Map();
+
+      // Add back quantities from old prescriptions
+      oldMeds.forEach(med => {
+        const current = quantityChanges.get(med.id) || 0;
+        quantityChanges.set(med.id, current + (med.quantity || 1));
+      });
+
+      // Subtract quantities from new prescriptions
+      newMeds.forEach(med => {
+        const current = quantityChanges.get(med.id) || 0;
+        quantityChanges.set(med.id, current - (med.quantity || 1));
+      });
+
+      // Apply the changes to inventory
+      for (const [medId, quantityChange] of quantityChanges) {
+        if (quantityChange !== 0) {
+          const inventoryItem = inventoryQueries.getById(medId);
+          if (inventoryItem) {
+            const newQuantity = inventoryItem.quantity + quantityChange;
+            if (newQuantity < 0) {
+              return res.status(400).json({
+                error: `Insufficient stock for ${inventoryItem.name}. Available: ${inventoryItem.quantity}, Required: ${Math.abs(quantityChange)}`
+              });
+            }
+            inventoryQueries.update(medId, { quantity: newQuantity });
+            inventoryUpdates.push({
+              medicineId: medId,
+              medicineName: inventoryItem.name,
+              quantityChange: quantityChange,
+              newStock: newQuantity
+            });
+          }
+        }
+      }
+    }
+
     // Include email and idNumber in the update data
     const updatedData = {
       ...data,
-      email: data.email || null,           // ✅ Handle email in updates
-      idNumber: data.idNumber || null      // ✅ Handle idNumber in updates
+      email: data.email || null,
+      idNumber: data.idNumber || null
     };
 
     const updatedRecord = medicalRecordQueries.update(id, updatedData);
-    res.json(updatedRecord);
+    res.json({
+      record: updatedRecord,
+      inventoryUpdates: inventoryUpdates
+    });
   } catch (err) {
     console.error('Error updating medical record:', err);
     res.status(500).json({ error: 'Failed to update medical record' });
