@@ -1,12 +1,34 @@
 import { useState } from 'react';
+import { useAuth } from './contexts/AuthContext';
+import Login from './components/Login';
 import AppointmentScheduler from './components/AppointmentScheduler';
 import InventoryManager from './components/InventoryManager';
 import MedicalRecords from './components/MedicalRecords';
 import './App.css';
 
 function App() {
+  const { user, login, logout, isAuthenticated, loading } = useAuth();
   const [activeTab, setActiveTab] = useState('appointments');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+
+  if (loading) {
+    return (
+      <div className="loading-screen">
+        <div className="loading-spinner"></div>
+        <p>Loading...</p>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return <Login onLogin={login} />;
+  }
+
+  const handleLogout = () => {
+    if (window.confirm('Are you sure you want to logout?')) {
+      logout();
+    }
+  };
 
   return (
     <div className="app-layout">
@@ -16,8 +38,8 @@ function App() {
             {!sidebarCollapsed && <h2>E-Cliniq</h2>}
             {!sidebarCollapsed && <p>Medical System</p>}
           </div>
-          <button 
-            className="toggle-btn" 
+          <button
+            className="toggle-btn"
             onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
             title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
           >
@@ -53,8 +75,15 @@ function App() {
 
         {!sidebarCollapsed && (
           <div className="sidebar-footer">
-            <p>Version 1.0</p>
-            <p>© 2024 E-Cliniq</p>
+            <div className="user-info">
+              <p className="user-name">{user?.name}</p>
+              <p className="user-role">{user?.role?.toUpperCase()}</p>
+            </div>
+            <button className="logout-btn" onClick={handleLogout}>
+              Logout
+            </button>
+            <p style={{ fontSize: '12px', marginTop: '10px', opacity: 0.7 }}>Version 1.0</p>
+            <p style={{ fontSize: '12px', opacity: 0.7 }}>© 2024 E-Cliniq</p>
           </div>
         )}
       </aside>
@@ -72,6 +101,10 @@ function App() {
               {activeTab === 'medical' && 'Patient medical history and records'}
               {activeTab === 'inventory' && 'Manage medicine stock and dosages'}
             </p>
+          </div>
+          <div className="header-user">
+            <span className="user-badge">{user?.role}</span>
+            <span className="user-email">{user?.email}</span>
           </div>
         </header>
 

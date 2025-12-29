@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
-
-const API_URL = 'http://localhost:3001/api';
+import { appointmentsAPI } from '../services/api';
 
 function AppointmentScheduler() {
   const [appointments, setAppointments] = useState([]);
@@ -14,10 +13,12 @@ function AppointmentScheduler() {
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [view, setView] = useState('list'); // 'list' or 'calendar'
+  const [conflictInfo, setConflictInfo] = useState(null); // New state for conflict information
+  const [view, setView] = useState('calendar'); // 'list' or 'calendar' - Default to calendar
   const [modalOpen, setModalOpen] = useState(false); // New state for modal
   const [selectedDate, setSelectedDate] = useState(null); // New state for selected date
   const [appointmentsForDate, setAppointmentsForDate] = useState([]); // New state for appointments for selected date
+  const [currentMonth, setCurrentMonth] = useState(new Date()); // Track current month for calendar navigation
 
   // Group appointments by date
   const groupedAppointments = appointments.reduce((acc, apt) => {
@@ -37,8 +38,7 @@ function AppointmentScheduler() {
 
   const fetchAppointments = async () => {
     try {
-      const response = await fetch(`${API_URL}/appointments`);
-      const data = await response.json();
+      const data = await appointmentsAPI.getAll();
       setAppointments(data);
     } catch (err) {
       setError('Failed to fetch appointments');
@@ -50,36 +50,60 @@ function AppointmentScheduler() {
     e.preventDefault();
     setLoading(true);
     setError('');
+    setConflictInfo(null);
 
     try {
-      const response = await fetch(`${API_URL}/appointments`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData)
-      });
-
-      if (!response.ok) throw new Error('Failed to create appointment');
-
-      const newAppointment = await response.json();
+      const newAppointment = await appointmentsAPI.create(formData);
       setAppointments([...appointments, newAppointment]);
       setFormData({ date: '', time: '', clientName: '', email: '', idNumber: '', service: '' });
     } catch (err) {
-      setError(err.message);
+      // Check if this is a conflict error (409)
+      if (err.message.includes('Time slot unavailable')) {
+        // Parse the error response to get conflict details
+        // The error object should contain conflictingAppointment and suggestedTimes
+        try {
+          const response = await fetch('http://localhost:3001/api/appointments', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${localStorage.getItem('token')}`
+            },
+            body: JSON.stringify(formData)
+          });
+
+          if (response.status === 409) {
+            const conflictData = await response.json();
+            setConflictInfo(conflictData);
+            setError(conflictData.error);
+          } else {
+            setError(err.message);
+          }
+        } catch {
+          setError(err.message);
+        }
+      } else {
+        setError(err.message);
+      }
     } finally {
       setLoading(false);
     }
+  };
+
+  // Handler to select a suggested time
+  const handleSelectSuggestedTime = (suggestedTime) => {
+    setFormData({
+      ...formData,
+      time: suggestedTime
+    });
+    setConflictInfo(null);
+    setError('');
   };
 
   const handleDelete = async (id) => {
     if (!window.confirm('Delete this appointment?')) return;
 
     try {
-      const response = await fetch(`${API_URL}/appointments/${id}`, {
-        method: 'DELETE'
-      });
-
-      if (!response.ok) throw new Error('Failed to delete appointment');
-
+      await appointmentsAPI.delete(id);
       setAppointments(appointments.filter(apt => apt.id !== id));
     } catch (err) {
       setError(err.message);
@@ -114,15 +138,35 @@ function AppointmentScheduler() {
     setView(view === 'list' ? 'calendar' : 'list');
   };
 
+  // Navigation handlers
+  const goToPreviousMonth = () => {
+    const newMonth = new Date(currentMonth);
+    newMonth.setMonth(newMonth.getMonth() - 1);
+    setCurrentMonth(newMonth);
+  };
+
+  const goToNextMonth = () => {
+    const newMonth = new Date(currentMonth);
+    newMonth.setMonth(newMonth.getMonth() + 1);
+    setCurrentMonth(newMonth);
+  };
+
+  const goToToday = () => {
+    setCurrentMonth(new Date());
+  };
+
   const generateCalendarDays = () => {
     const days = [];
-    const now = new Date();
-    const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    const year = currentMonth.getFullYear();
+    const month = currentMonth.getMonth();
 
-    for (let i = 0; i < (end - start) / (24 * 60 * 60 * 1000) + 1; i++) {
-      const date = new Date(start);
-      date.setDate(start.getDate() + i);
+    // Get first and last day of month
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+
+    // Generate all days in the month
+    for (let day = 1; day <= lastDay.getDate(); day++) {
+      const date = new Date(year, month, day);
       days.push(date.toISOString().split('T')[0]);
     }
 
@@ -130,6 +174,12 @@ function AppointmentScheduler() {
   };
 
   const calendarDays = generateCalendarDays();
+
+  // Format month/year for display
+  const monthYearDisplay = currentMonth.toLocaleDateString('en-US', {
+    month: 'long',
+    year: 'numeric'
+  });
 
   // Handle date click to open modal
   const handleDateClick = (date) => {
@@ -152,6 +202,33 @@ function AppointmentScheduler() {
       <h2>📅 Appointment Scheduler</h2>
 
       {error && <div className="error-message">{error}</div>}
+
+      {/* Conflict Information with Suggested Times */}
+      {conflictInfo && conflictInfo.suggestedTimes && (
+        <div className="conflict-info">
+          <h3>⚠️ Appointment Conflict</h3>
+          <p>
+            <strong>Conflicting Appointment:</strong> {conflictInfo.conflictingAppointment.clientName} at {conflictInfo.conflictingAppointment.time}
+            <br />
+            <strong>Service:</strong> {conflictInfo.conflictingAppointment.service}
+          </p>
+          <div className="suggested-times">
+            <h4>Suggested Available Times:</h4>
+            <div className="time-buttons">
+              {conflictInfo.suggestedTimes.map((time, index) => (
+                <button
+                  key={index}
+                  type="button"
+                  className="suggested-time-btn"
+                  onClick={() => handleSelectSuggestedTime(time)}
+                >
+                  {time}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Toggle View Button */}
       <button onClick={toggleView} className="toggle-view-btn">
@@ -237,18 +314,26 @@ function AppointmentScheduler() {
       {/* Calendar View */}
 {view === 'calendar' && (
   <div className="calendar-view">
-    <h3>🗓️ Calendar View — Appointments by Date</h3>
-    <div className="calendar-grid">
-      {/* Generate calendar for current month */}
-      <div className="calendar-header">
-        <div className="month-display">
-          <span>🗓️ {new Date().toLocaleString('default', { month: 'long', year: 'numeric' })}</span>
-        </div>
+    <div className="calendar-controls">
+      <button onClick={goToPreviousMonth} className="month-nav-btn">
+        ◀ Previous
+      </button>
+      <div className="month-year-display">
+        <h3>🗓️ {monthYearDisplay}</h3>
       </div>
+      <button onClick={goToNextMonth} className="month-nav-btn">
+        Next ▶
+      </button>
+      <button onClick={goToToday} className="today-btn">
+        📅 Today
+      </button>
+    </div>
+    <div className="calendar-grid">
 
       {/* Render grid of calendar days */}
       {calendarDays.map((date) => {
-        const count = groupedAppointments[date] ? groupedAppointments[date].length : 0;
+        const dayAppointments = groupedAppointments[date] || [];
+        const count = dayAppointments.length;
         const isToday = new Date(date).toDateString() === new Date().toDateString();
         const isPast = new Date(date) < new Date();
 
@@ -256,32 +341,75 @@ function AppointmentScheduler() {
         const dayOfMonth = new Date(date).getDate();
         const dayOfWeek = new Date(date).toLocaleString('en-US', { weekday: 'short' });
 
+        // Determine background color based on appointment density
+        let bgColor = '#fff';
+        let borderColor = '#e0e0e0';
+        if (isToday) {
+          bgColor = '#e3f2fd';
+          borderColor = '#2196f3';
+        } else if (count === 0) {
+          bgColor = '#fafafa';
+        } else if (count <= 2) {
+          bgColor = '#e3f2fd';
+          borderColor = '#64b5f6';
+        } else if (count <= 4) {
+          bgColor = '#bbdefb';
+          borderColor = '#42a5f5';
+        } else {
+          bgColor = '#90caf9';
+          borderColor = '#2196f3';
+        }
+
         return (
           <div
             key={date}
             className={`calendar-day ${isToday ? 'today' : ''} ${isPast ? 'past' : ''} ${count > 0 ? 'has-appointments' : ''}`}
             style={{
-              backgroundColor: isToday ? '#e8f4fd' : isPast ? '#f8f9fa' : '#fff',
-              border: count > 0 ? `2px solid #667eea` : 'none',
-              cursor: count > 0 ? 'pointer' : 'default',
-              padding: '10px',
-              textAlign: 'center',
-              fontSize: '1.1rem',
-              fontWeight: count > 0 ? 'bold' : 'normal',
-              borderRadius: '6px',
-              color: count > 0 ? '#667eea' : '#333',
-              transition: 'all 0.2s',
-              minWidth: '120px',
+              backgroundColor: bgColor,
+              border: `2px solid ${borderColor}`,
+              cursor: 'pointer',
+              padding: '12px',
+              borderRadius: '8px',
+              transition: 'all 0.3s ease',
+              minHeight: '100px',
+              display: 'flex',
+              flexDirection: 'column',
+              position: 'relative'
             }}
-            onClick={() => handleDateClick(date)} // Open modal on click
+            onClick={() => handleDateClick(date)}
           >
-            <span className="day">{dayOfMonth}</span>
-            {count > 0 && (
-              <span className="appointment-badge">
-                {count}
+            <div className="calendar-day-header" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+              <span className="day-number" style={{ fontSize: '1.2rem', fontWeight: 'bold', color: isToday ? '#1976d2' : '#424242' }}>
+                {dayOfMonth}
               </span>
+              <span className="day-of-week" style={{ fontSize: '0.8rem', color: '#757575', textTransform: 'uppercase' }}>
+                {dayOfWeek}
+              </span>
+            </div>
+            {count > 0 && (
+              <div className="appointment-count-badge" style={{
+                background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
+                color: 'white',
+                borderRadius: '12px',
+                padding: '4px 10px',
+                fontSize: '0.85rem',
+                fontWeight: '600',
+                textAlign: 'center',
+                marginBottom: '6px'
+              }}>
+                {count} {count === 1 ? 'Appointment' : 'Appointments'}
+              </div>
             )}
-            <span className="day-of-week">{dayOfWeek}</span>
+            {count > 0 && (
+              <div className="appointment-preview" style={{ fontSize: '0.75rem', color: '#616161', overflow: 'hidden' }}>
+                {dayAppointments.slice(0, 2).map((apt, idx) => (
+                  <div key={idx} style={{ marginBottom: '2px', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>
+                    {apt.time} - {apt.service}
+                  </div>
+                ))}
+                {count > 2 && <div style={{ fontStyle: 'italic', color: '#9e9e9e' }}>+{count - 2} more...</div>}
+              </div>
+            )}
           </div>
         );
       })}
