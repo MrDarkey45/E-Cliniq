@@ -1,91 +1,91 @@
 # E-Cliniq Medical Practice Management System
 
-A comprehensive medical practice management system built with React and Node.js, designed to streamline healthcare operations through appointment scheduling, medical records management, and inventory tracking.
+A comprehensive medical practice management system built with React and Node.js, designed to streamline healthcare operations through appointment scheduling, patient and medical-records management, and inventory tracking.
 
-![Version](https://img.shields.io/badge/version-1.0-blue)
+![Version](https://img.shields.io/badge/version-2.0-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
 ## Overview
 
-E-Cliniq is a full-stack medical management application that provides healthcare professionals with tools to efficiently manage patient appointments, maintain detailed medical records, and track medicine inventory. The system features role-based access control, input validation, and a modern, responsive user interface. This is a public-facing version of my project submitted as my project-based learning portfolio.
+E-Cliniq is a full-stack medical management application that gives healthcare professionals the tools to manage patients, appointments, medical records, and medicine/supply inventory. The system features role-based access control, a role-aware dashboard, real-time inventory integration, and a modern, responsive interface. This is a public-facing version of my project submitted as my project-based learning portfolio.
 
 ## Key Features
 
 ### 🔐 Authentication & Authorization
 - **Role-Based Access Control** with four user types:
-  - **Nurse**: Schedule appointments, manage inventory
+  - **Nurse**: Schedule appointments, manage inventory, record patient visits
   - **Doctor**: Full access to medical records, prescribe medications
   - **Admin**: Complete system access including deletions
-  - **Patient**: View personal medical records
+  - **Patient**: View their own records and **book/cancel their own appointments**
 - **Secure Session Management** with JWT tokens
 - **Persistent Login** across browser sessions
 - **Protected API Routes** with middleware authorization
 
+### 📊 Role-Aware Dashboard
+- Personalized greeting and at-a-glance stats tailored to each role
+- Staff: today's schedule, recent records, low-stock alerts, quick actions
+- Patient: upcoming visits, care summary, and active prescriptions
+
 ### 📅 Appointment Scheduling
-- **Calendar View** as default with monthly navigation
-- **Conflict Detection** prevents overlapping appointments
-- **Smart Suggestions** for alternative time slots when conflicts occur
-- **Patient Information** capture (name, email, ID number, age, gender)
-- **Service Type** categorization
-- **Automatic Medical Record Creation** when appointments are scheduled
-- **Search and Filter** capabilities
-- **Role-Based Permissions** (only Nurses and Admins can create/delete)
+- **Week time-grid (default)** and **Month overview**, with 30-minute slots from 8:00 AM–4:30 PM
+- **Status lifecycle**: appointments are *Scheduled*, automatically become *Completed* once their time passes, or can be *Cancelled* (kept as history, not deleted)
+- **Patient self-service**: patients can book and cancel their own appointments; cancelling a slot frees it for rebooking
+- **Cancellation notifications**: when a patient cancels, all staff are notified
+- **Patient privacy**: a patient sees other patients' booked slots only as "Unavailable" (no personal details), via a dedicated availability endpoint
+- **Conflict detection** with alternative time-slot suggestions, plus past-date prevention
+- **Open patient record** shortcut directly from an appointment, with details pre-filled
+- **Sundays disabled** in the calendar
+- Service-type categorization and color coding
+
+### 🧑‍⚕️ Patient Management
+- Dedicated **patients directory** with search by name, ID number, or email
+- **Patient lookup** when booking appointments or creating records (no need to re-type details)
+- Patient profiles include demographics, date of birth (auto-calculates age), and allergies
+- Ships with **50 seeded demo patients** for realistic testing
 
 ### 🏥 Medical Records Management
-- **Comprehensive Patient Records** including:
-  - Patient demographics (name, email, ID number, age, gender)
+- **Patient-centric** view: open a patient to see their full **visit history**
+- Each visit captures:
   - Clinical information (symptoms, diagnosis, treatment)
   - Vital signs (blood pressure, heart rate, temperature)
   - Lab results and X-ray notes
-  - Allergies and medical history
-  - Follow-up scheduling
-- **Duplicate Prevention** ensures one record per patient
-- **Electronic Prescriptions** with real-time inventory integration
-- **Medicine Prescription Interface**:
-  - Browse available medicines from inventory
-  - Low stock warnings
+  - Allergies and follow-up scheduling
+- **Electronic Prescriptions** with real-time inventory integration:
+  - Browse available medicines, with low-stock warnings
   - Quantity selection with stock validation
-  - Automatic inventory deduction upon prescription
-- **Search Functionality** by patient name
-- **Edit and Update** existing records with inventory reconciliation
-- **Organized Tab Interface** (Basic Info, Clinical, Prescription, Vitals)
+  - Automatic inventory deduction on save, and reconciliation on edit
+- **Organized tabbed form** (Basic, Clinical, Vitals, Prescription)
+- **Search** by patient name, ID number, or email
 
-### 💊 Medicine Inventory Management
-- **Real-Time Stock Tracking**
-- **Inventory Statistics Dashboard**:
-  - Total medicines count
-  - Total stock levels
-  - Low stock alerts (< 10 units)
-- **Quick Quantity Adjustments** with +/- buttons
-- **Medicine Details**:
-  - Name and dosage information
-  - Unit type (mg/ml)
-  - Current quantity
-- **Search and Filter** by medicine name or dosage
-- **Low Stock Highlighting** for items needing restock
-- **Automatic Inventory Updates** when medicines are prescribed
-- **Role-Based Controls** (Nurses and Admins can add/edit/delete)
+### 💊 Inventory Management (Medicines & Supplies)
+- Tracks both **medicines** and **medical supplies** with a type filter
+- **Real-time stock tracking** with live +/- quantity steppers
+- **Statistics**: medicines count, supplies count, and items needing restock
+- **Item details**: name, dosage (medicines) or size (supplies), and unit (mg/ml, pcs, rolls, boxes, …)
+- **Low-stock highlighting and alerts** (threshold: 10 units)
+- **Automatic inventory updates** when medicines are prescribed
+- **Role-Based Controls** (Nurses and Admins can add/edit/delete; Doctors view-only)
+
+### 🔔 Notifications
+- Topbar notification bell with an unread badge (staff)
+- Per-user read state — opening the bell clears it for that user only
+- Currently surfaces patient appointment cancellations
 
 ### 🎨 Modern User Interface
-- **Professional Icon Set** using React Icons (Font Awesome)
-- **Responsive Design** for desktop and mobile devices
-- **Collapsible Sidebar Navigation**
-- **Color-Coded Interface**:
-  - Consistent purple gradient theme across all modules
-  - Visual indicators for low stock items
-  - Service type color coding
-- **Modal Forms** with proper spacing and validation feedback
-- **Empty States** with helpful guidance
-- **Loading Indicators** for async operations
-- **Intuitive Tab Navigation**
+- **Warm design system**: royal blue + golden yellow palette, Hanken Grotesk typeface, soft surfaces (see `theme.css`)
+- **App shell** with collapsible Sidebar and sticky Topbar
+- **React Icons** (Font Awesome) iconography
+- **Responsive design** for desktop and mobile
+- **Toasts, modals, empty states, and loading indicators** throughout
+- Role-aware navigation (patients see relabeled nav and no Inventory)
 
 ## Technology Stack
 
 ### Frontend
 - **React 18** with Vite
-- **React Icons** for professional iconography
-- **Context API** for state management
-- **CSS3** with custom styling
+- **React Icons** for iconography
+- **Context API** for state management (Auth + Toast)
+- **CSS design tokens** (`theme.css`) with a custom warm theme
 - **LocalStorage** for session persistence
 
 ### Backend
@@ -105,7 +105,7 @@ E-Cliniq is a full-stack medical management application that provides healthcare
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/yourusername/E-Cliniq.git
+   git clone https://github.com/MrDarkey45/E-Cliniq.git
    cd E-Cliniq
    ```
 
@@ -126,18 +126,18 @@ E-Cliniq is a full-stack medical management application that provides healthcare
    cd ../backend
    npm start
    ```
-   Server will run on `http://localhost:3001`
+   Server runs on `http://localhost:3001`. On first launch it creates and seeds the SQLite database automatically (the `.db` file is git-ignored and regenerated locally).
 
 5. **Start the frontend development server**
    ```bash
    cd ../frontend
    npm run dev
    ```
-   Application will run on `http://localhost:5173`
+   Application runs on `http://localhost:5173`
 
 ## Default User Credentials
 
-The system comes with four pre-configured user accounts for demonstration:
+The system comes with four pre-configured staff/demo accounts:
 
 | Role | Email | Password |
 |------|-------|----------|
@@ -145,6 +145,8 @@ The system comes with four pre-configured user accounts for demonstration:
 | Doctor | doctor@email.com | doctorPassword123 |
 | Admin | admin@email.com | adminPassword123 |
 | Patient | patient@email.com | patientPassword123 |
+
+In addition, **50 demo patients** are seeded with the email pattern `flastname@patient.com` and password `patientpassword` (e.g. `pparker@patient.com` for Peter Parker).
 
 ## API Endpoints
 
@@ -155,53 +157,54 @@ The system comes with four pre-configured user accounts for demonstration:
 
 ### Appointments
 - `GET /api/appointments` - Get all appointments (authenticated)
-- `POST /api/appointments` - Create appointment (Nurse, Admin)
-- `GET /api/appointments/patient/:identifier` - Get patient appointments
-- `DELETE /api/appointments/:id` - Delete appointment (Nurse, Admin)
+- `POST /api/appointments` - Create appointment (Nurse, Admin, Patient — patients book for themselves)
+- `GET /api/appointments/patient/:identifier` - Get a patient's appointments
+- `GET /api/appointments/availability` - Get taken slots (no personal data; used for privacy)
+- `DELETE /api/appointments/:id` - Cancel appointment (Nurse/Admin any; Patient their own)
+
+### Patients
+- `GET /api/patients` - List patients (Nurse, Doctor, Admin)
+- `GET /api/patients/search?q=` - Search by name, ID, or email
+- `GET /api/patients/me` - Current patient's profile
+- `GET /api/patients/:id` - Patient with visit history
+- `POST /api/patients` - Create patient (Nurse, Doctor, Admin)
+- `PUT /api/patients/:id` - Update patient
+- `GET /api/patients/:id/visits` - A patient's visit records
 
 ### Medical Records
-- `GET /api/medical-records` - Get all records (Doctor, Nurse, Admin)
-- `POST /api/medical-records` - Create record (Doctor, Nurse)
+- `GET /api/medical-records` - Get records (patients see only their own)
+- `POST /api/medical-records` - Create a visit record (Doctor, Nurse, Admin)
 - `GET /api/medical-records/:id` - Get record by ID
-- `PUT /api/medical-records/:id` - Update record (Doctor, Nurse)
-- `DELETE /api/medical-records/:id` - Delete record (Doctor, Admin)
+- `PUT /api/medical-records/:id` - Update record (Doctor, Nurse, Admin)
+- `DELETE /api/medical-records/:id` - Delete record (Doctor, Nurse, Admin)
 - `GET /api/medical-records/search/:name` - Search records by name
 
 ### Inventory
 - `GET /api/inventory` - Get all inventory items (authenticated)
-- `POST /api/inventory` - Add inventory item (Nurse, Admin)
-- `PUT /api/inventory/:id` - Update inventory item (Nurse, Admin)
-- `DELETE /api/inventory/:id` - Delete inventory item (Nurse, Admin)
+- `POST /api/inventory` - Add item (Nurse, Admin)
+- `PUT /api/inventory/:id` - Update item (Nurse, Admin)
+- `DELETE /api/inventory/:id` - Delete item (Nurse, Admin)
+
+### Notifications
+- `GET /api/notifications` - Unread notifications + count for the current user (staff)
+- `PUT /api/notifications/read` - Mark all as read for the current user
 
 ## Key Features in Detail
 
-### Smart Appointment Conflict Detection
-The system automatically detects scheduling conflicts by:
-- Checking for appointments within 1-hour time slots
-- Providing up to 3 alternative time suggestions
-- Working hours: 8:00 AM - 4:00 PM (last appointment slot)
-- Clear conflict messaging with patient information
+### Appointment Status Lifecycle
+- New appointments are **Scheduled**.
+- They automatically display as **Completed** once the slot's date/time has passed (derived on read — no background job).
+- Cancelling sets status to **Cancelled** and keeps the row as history rather than deleting it; the freed slot becomes available to book again.
 
-### Duplicate Medical Record Prevention
-- Automatically detects existing records by ID number or email
-- Prompts users to edit existing records instead of creating duplicates
-- Displays existing record information for verification
-- Maintains data integrity across the system
+### Patient Privacy
+- Patients load their own appointments plus a personal-data-free availability list, so other patients' booked slots appear only as "Unavailable."
 
 ### Integrated Inventory Management
 - Real-time stock validation when prescribing medicines
-- Automatic inventory deduction upon medical record creation/update
-- Inventory restoration when prescriptions are modified or removed
-- Detailed error messages for insufficient stock scenarios
-- Low stock alerts (threshold: 10 units)
-
-### Auto-Creation of Medical Records
-When scheduling appointments with patient ID or email:
-- System checks for existing medical record
-- Creates new record automatically if none exists
-- Links appointment to medical record
-- Pre-fills basic patient information
-- Reduces data entry redundancy
+- Automatic inventory deduction on visit creation/update
+- Inventory restoration/reconciliation when prescriptions are modified or removed
+- Detailed error messages for insufficient-stock scenarios
+- Low-stock alerts (threshold: 10 units)
 
 ## Project Structure
 
@@ -209,24 +212,31 @@ When scheduling appointments with patient ID or email:
 E-Cliniq/
 ├── backend/
 │   ├── middleware/
-│   │   └── auth.js              # Authentication middleware
-│   ├── database.js              # SQLite database setup and queries
+│   │   └── auth.js              # Authentication & authorization middleware
+│   ├── database.js              # SQLite schema, queries, and seed data
 │   ├── server.js                # Express server and API routes
 │   └── package.json
 ├── frontend/
+│   ├── index.html
 │   ├── src/
 │   │   ├── components/
-│   │   │   ├── Login.jsx        # Login component
+│   │   │   ├── Login.jsx
+│   │   │   ├── Sidebar.jsx
+│   │   │   ├── Topbar.jsx        # Top bar + notifications bell
+│   │   │   ├── Dashboard.jsx
 │   │   │   ├── AppointmentScheduler.jsx
 │   │   │   ├── MedicalRecords.jsx
-│   │   │   └── InventoryManager.jsx
+│   │   │   ├── InventoryManager.jsx
+│   │   │   └── ui.jsx            # Shared UI primitives (Avatar, Modal, Stat, …)
 │   │   ├── contexts/
-│   │   │   └── AuthContext.jsx  # Authentication context
+│   │   │   ├── AuthContext.jsx
+│   │   │   └── ToastContext.jsx
 │   │   ├── services/
-│   │   │   └── api.js           # API service layer
+│   │   │   └── api.js            # API service layer
 │   │   ├── App.jsx              # Main application component
-│   │   ├── App.css              # Application styles
-│   │   └── main.jsx             # Application entry point
+│   │   ├── App.css              # Legacy styles
+│   │   ├── theme.css           # Design system (tokens + components)
+│   │   └── main.jsx            # Application entry point
 │   └── package.json
 └── README.md
 ```
@@ -238,23 +248,7 @@ E-Cliniq/
 - **Protected Routes**: API endpoints secured with authentication middleware
 - **Input Validation**: Server-side validation for all user inputs
 - **Session Timeout**: Automatic logout on token expiration
-- **Password Security**: Note - Current version uses plain text for demo purposes
-
-## Data Validation
-
-### Frontend Validation
-- Required field enforcement
-- Email format validation
-- Numeric range validation
-- Real-time feedback on form errors
-- Conflict detection before submission
-
-### Backend Validation
-- Appointment conflict checking
-- Duplicate record prevention
-- Stock availability verification
-- Field format validation
-- Data type enforcement
+- **Password Security**: Note — the current version uses plain text for demo purposes
 
 ## License
 
@@ -272,4 +266,4 @@ For questions or support, please open an issue on GitHub.
 
 ---
 
-**Version 1.0** - © 2024 E-Cliniq
+**Version 2.0** - © 2026 E-Cliniq
