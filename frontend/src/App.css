@@ -1,3 +1,5 @@
+/* App.css — legacy styles superseded by theme.css. Kept for AppointmentScheduler
+   and MedicalRecords until those components are ported to the new design system. */
 /* ================== GLOBAL STYLES ================== */
 * {
   margin: 0;

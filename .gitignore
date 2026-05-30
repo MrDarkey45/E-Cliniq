@@ -1,0 +1,22 @@
+# Dependencies
+node_modules/
+
+# OS files
+.DS_Store
+
+# Local database (regenerated from seed on first run)
+*.db
+*.db-shm
+*.db-wal
+
+# Environment
+.env
+.env.local
+
+# Build output
+dist/
+build/
+
+# Internal docs — not part of the application
+CLAUDE.md
+handoff/

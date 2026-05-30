@@ -1,53 +1,41 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
-import { appointmentQueries, inventoryQueries, medicalRecordQueries, userQueries, closeDatabase } from './database.js';
-import { generateToken, authenticate, authorize, authorizePatientRecords } from './middleware/auth.js';
+import {
+  appointmentQueries, inventoryQueries, medicalRecordQueries,
+  patientQueries, notificationQueries, userQueries, closeDatabase,
+} from './database.js';
+import { generateToken, authenticate, authorize } from './middleware/auth.js';
 
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-// Middleware
 app.use(cors());
 app.use(express.json());
 
-// Graceful shutdown
-process.on('SIGINT', () => {
-  closeDatabase();
-  process.exit(0);
-});
+process.on('SIGINT', () => { closeDatabase(); process.exit(0); });
 
-// ============ AUTHENTICATION ENDPOINTS ============
+// ── Auth ──────────────────────────────────────────────────────────────────────
 
-// Login endpoint
 app.post('/api/auth/login', (req, res) => {
   const { email, password } = req.body;
-
-  if (!email || !password) {
-    return res.status(400).json({ error: 'Email and password are required' });
-  }
-
+  if (!email || !password) return res.status(400).json({ error: 'Email and password are required' });
   try {
     const user = userQueries.getByEmail(email);
-
-    if (!user || user.password !== password) {
+    if (!user || user.password !== password)
       return res.status(401).json({ error: 'Invalid email or password' });
-    }
 
-    // Generate token
     const token = generateToken(user);
-
-    // Return user info and token (excluding password)
+    // Include patient profile if role is patient
+    let patientProfile = null;
+    if (user.role === 'patient') {
+      patientProfile = patientQueries.getByEmail(user.email);
+    }
     res.json({
-      user: {
-        id: user.id,
-        email: user.email,
-        role: user.role,
-        name: user.name
-      },
-      token
+      user: { id: user.id, email: user.email, role: user.role, name: user.name, patientProfile },
+      token,
     });
   } catch (err) {
     console.error('Login error:', err);
@@ -55,592 +43,451 @@ app.post('/api/auth/login', (req, res) => {
   }
 });
 
-// Get current user info
 app.get('/api/auth/me', authenticate, (req, res) => {
-  res.json({
-    user: {
-      id: req.user.id,
-      email: req.user.email,
-      role: req.user.role,
-      name: req.user.name
-    }
-  });
+  let patientProfile = null;
+  if (req.user.role === 'patient') {
+    patientProfile = patientQueries.getByEmail(req.user.email);
+  }
+  res.json({ user: { id: req.user.id, email: req.user.email, role: req.user.role, name: req.user.name, patientProfile } });
 });
 
-// Logout endpoint (mainly for frontend to clear token)
-app.post('/api/auth/logout', (req, res) => {
-  res.json({ message: 'Logged out successfully' });
-});
+app.post('/api/auth/logout', (req, res) => res.json({ message: 'Logged out successfully' }));
 
-// ============ APPOINTMENT ENDPOINTS ============
+// ── Appointments ──────────────────────────────────────────────────────────────
 
-// Get all appointments (requires authentication)
 app.get('/api/appointments', authenticate, (req, res) => {
   try {
-    const appointments = appointmentQueries.getAll();
-    res.json(appointments);
+    res.json(appointmentQueries.getAll());
   } catch (err) {
-    console.error('Error fetching appointments:', err);
     res.status(500).json({ error: 'Failed to fetch appointments' });
   }
 });
 
-// Helper function to check for appointment conflicts
-const checkAppointmentConflict = (date, time) => {
-  const allAppointments = appointmentQueries.getAll();
-  const appointmentsOnDate = allAppointments.filter(apt => apt.date === date);
+// Availability endpoint — returns only {date, time} pairs, no PII
+// Patients use this to see which slots are taken without seeing other patients' data
+app.get('/api/appointments/availability', authenticate, (req, res) => {
+  try {
+    const { date } = req.query;
+    const slots = date
+      ? appointmentQueries.getTakenSlots(date)
+      : appointmentQueries.getAllTakenSlots();
+    res.json(slots.map(s => ({ date: s.date, time: s.time })));
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch availability' });
+  }
+});
 
-  // Parse the requested time (format: "HH:MM")
-  const [reqHour, reqMin] = time.split(':').map(Number);
-  const requestedMinutes = reqHour * 60 + reqMin;
+// Patient's own appointments
+app.get('/api/appointments/patient/:identifier', authenticate, (req, res) => {
+  try {
+    const id = req.params.identifier;
+    const isEmail = id.includes('@');
+    const rows = isEmail
+      ? medicalRecordQueries.getAppointmentsForPatient(null, id)
+      : medicalRecordQueries.getAppointmentsForPatient(id, null);
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch patient appointments' });
+  }
+});
 
-  // Check for conflicts (assuming 1-hour appointment slots)
-  for (const apt of appointmentsOnDate) {
-    const [aptHour, aptMin] = apt.time.split(':').map(Number);
-    const aptMinutes = aptHour * 60 + aptMin;
+// Create appointment — nurses, admins, and patients can book
+app.post('/api/appointments', authenticate, authorize(['nurse', 'admin', 'patient']), (req, res) => {
+  let { date, time, clientName, email, idNumber, age, gender, service } = req.body;
 
-    // Conflict if appointments are within 1 hour of each other
-    if (Math.abs(requestedMinutes - aptMinutes) < 60) {
-      return apt;
+  // Patients can only book for themselves — override with their own details
+  if (req.user.role === 'patient') {
+    const profile = patientQueries.getByEmail(req.user.email);
+    clientName = req.user.name;
+    email      = req.user.email;
+    idNumber   = profile?.id_number || idNumber;
+    gender     = profile?.gender    || gender;
+    if (profile?.dob) {
+      const [y] = profile.dob.split('-').map(Number);
+      age = 2026 - y;
     }
   }
 
-  return null;
-};
-
-// Helper function to suggest alternative appointment times
-const suggestAlternativeTimes = (date) => {
-  const allAppointments = appointmentQueries.getAll();
-  const appointmentsOnDate = allAppointments.filter(apt => apt.date === date);
-
-  // Working hours: 8:00 AM - 5:00 PM (last appointment at 4:00 PM for 1-hour slot)
-  const workStart = 8 * 60; // 8:00 AM in minutes
-  const workEnd = 16 * 60;  // 4:00 PM in minutes (last slot start)
-
-  // Get all occupied time slots
-  const occupiedSlots = appointmentsOnDate.map(apt => {
-    const [hour, min] = apt.time.split(':').map(Number);
-    return hour * 60 + min;
-  });
-
-  // Find available slots
-  const suggestions = [];
-  for (let minutes = workStart; minutes <= workEnd; minutes += 60) {
-    // Check if this slot is available (no appointment within 1 hour)
-    const isAvailable = !occupiedSlots.some(occupied =>
-      Math.abs(minutes - occupied) < 60
-    );
-
-    if (isAvailable && suggestions.length < 3) {
-      const hours = Math.floor(minutes / 60);
-      const mins = minutes % 60;
-      suggestions.push(`${String(hours).padStart(2, '0')}:${String(mins).padStart(2, '0')}`);
-    }
-  }
-
-  return suggestions;
-};
-
-// Create new appointment (requires nurse or admin role)
-app.post('/api/appointments', authenticate, authorize(['nurse', 'admin']), (req, res) => {
-  const { date, time, clientName, email, idNumber, age, gender, service } = req.body;
-
-  if (!date || !time || !clientName || !service) {
+  if (!date || !time || !clientName || !service)
     return res.status(400).json({ error: 'Date, time, client name, and service are required' });
-  }
+
+  // Prevent booking in the past
+  const now = new Date();
+  const [slotH, slotM] = time.split(':').map(Number);
+  const slot = new Date(`${date}T${String(slotH).padStart(2,'0')}:${String(slotM).padStart(2,'0')}:00`);
+  if (slot < now)
+    return res.status(400).json({ error: 'Cannot book an appointment in the past' });
 
   try {
-    // Check for appointment conflicts
-    const conflictingAppointment = checkAppointmentConflict(date, time);
-
-    if (conflictingAppointment) {
-      const suggestedTimes = suggestAlternativeTimes(date);
+    // Exact-match conflict check (30-min slots — no overlap possible between distinct slots)
+    if (appointmentQueries.isSlotTaken(date, time)) {
+      const available = suggestAlternatives(date);
       return res.status(409).json({
         error: 'Time slot unavailable',
-        conflictingAppointment: {
-          id: conflictingAppointment.id,
-          time: conflictingAppointment.time,
-          clientName: conflictingAppointment.clientName,
-          service: conflictingAppointment.service
-        },
-        suggestedTimes: suggestedTimes.length > 0 ? suggestedTimes : ['No available slots today']
+        conflictingAppointment: { date, time, service },
+        suggestedTimes: available,
       });
     }
 
-    // Create the appointment
-    const newAppointment = appointmentQueries.create({
-      date,
-      time,
-      clientName,
-      email: email || null,
-      idNumber: idNumber || null,
-      age: age || null,
-      gender: gender || null,
-      service
-    });
-
-    // Auto-create or update medical record if patient has ID number or email
-    if (idNumber || email) {
-      // Check if patient already has a medical record
-      const existingRecord = medicalRecordQueries.getByIdNumberOrEmail(idNumber, email);
-
-      if (!existingRecord) {
-        // Create new medical record with appointment link
-        medicalRecordQueries.create({
-          appointmentId: newAppointment.id,
-          patientName: clientName,
-          email: email || null,
-          idNumber: idNumber || null,
-          age: age || null,
-          gender: gender || null,
-          symptoms: 'Scheduled appointment',
-          diagnosis: 'Pending examination',
-          treatment: 'To be determined',
-          medications: '',
-          allergies: '',
-          bloodPressure: null,
-          heartRate: null,
-          temperature: null,
-          notes: `Auto-created from appointment on ${date} at ${time}`,
-          followUpDate: date,
-          labResults: '',
-          xrayNotes: ''
-        });
-      }
-      // If record exists, we don't update it - medical staff will add details manually
-    }
-
-    res.status(201).json(newAppointment);
+    const appt = appointmentQueries.create({ date, time, clientName, email, idNumber, age, gender, service });
+    res.status(201).json(appt);
   } catch (err) {
     console.error('Error creating appointment:', err);
     res.status(500).json({ error: 'Failed to create appointment' });
   }
 });
-// Get appointments for a patient (by ID number or email)
-app.get('/api/appointments/patient/:identifier', authenticate, (req, res) => {
-  const identifier = req.params.identifier;
 
-  try {
-    // Try to determine if identifier is email or ID number
-    const isEmail = identifier.includes('@');
-    const appointments = isEmail
-      ? medicalRecordQueries.getAppointmentsForPatient(null, identifier)
-      : medicalRecordQueries.getAppointmentsForPatient(identifier, null);
-
-    res.json(appointments);
-  } catch (err) {
-    console.error('Error fetching patient appointments:', err);
-    res.status(500).json({ error: 'Failed to fetch patient appointments' });
-  }
-});
-
-// Delete appointment (requires nurse or admin role)
-app.delete('/api/appointments/:id', authenticate, authorize(['nurse', 'admin']), (req, res) => {
+// Cancel appointment — nurses/admins can cancel any; patients can cancel their own only.
+// The row is kept with status 'Cancelled' (history) rather than being deleted.
+app.delete('/api/appointments/:id', authenticate, (req, res) => {
   const id = parseInt(req.params.id);
+  const role = req.user.role;
+
+  if (!['nurse', 'admin', 'patient'].includes(role))
+    return res.status(403).json({ error: 'Insufficient permissions' });
 
   try {
-    const result = appointmentQueries.delete(id);
-    if (result.changes === 0) {
-      return res.status(404).json({ error: 'Appointment not found' });
+    const appt = appointmentQueries.getById(id);
+    if (!appt) return res.status(404).json({ error: 'Appointment not found' });
+
+    // Patients may only cancel appointments linked to their own email
+    if (role === 'patient' && appt.email !== req.user.email)
+      return res.status(403).json({ error: 'You can only cancel your own appointments' });
+
+    if (appt.status === 'Cancelled')
+      return res.status(400).json({ error: 'Appointment is already cancelled' });
+
+    appointmentQueries.cancel(id);
+
+    // Notify all staff when a patient cancels
+    if (role === 'patient') {
+      const localDate = new Date(`${appt.date}T00:00:00`);
+      const dateStr = localDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+      const [h, m] = appt.time.split(':').map(Number);
+      const ap = h >= 12 ? 'PM' : 'AM';
+      const timeStr = `${h % 12 || 12}:${String(m).padStart(2,'0')} ${ap}`;
+      notificationQueries.create(
+        'appointment_cancelled',
+        `${appt.clientName} cancelled their ${appt.service} appointment on ${dateStr} at ${timeStr}.`,
+        { appointmentId: id, patientName: appt.clientName, service: appt.service, date: appt.date, time: appt.time }
+      );
     }
-    res.json({ message: 'Appointment deleted successfully' });
+
+    res.json({ message: 'Appointment cancelled successfully' });
   } catch (err) {
     console.error('Error deleting appointment:', err);
-    res.status(500).json({ error: 'Failed to delete appointment' });
+    res.status(500).json({ error: 'Failed to cancel appointment' });
   }
 });
 
-// ============ INVENTORY ENDPOINTS ============
+const SLOT_TIMES = [
+  '08:00','08:30','09:00','09:30','10:00','10:30','11:00','11:30',
+  '13:00','13:30','14:00','14:30','15:00','15:30','16:00','16:30',
+];
 
-// Get all inventory items (requires authentication)
+const suggestAlternatives = (date) => {
+  const taken = new Set(appointmentQueries.getTakenSlots(date).map(s => s.time));
+  return SLOT_TIMES.filter(t => !taken.has(t)).slice(0, 4);
+};
+
+// ── Patients ──────────────────────────────────────────────────────────────────
+
+app.get('/api/patients', authenticate, authorize(['nurse', 'doctor', 'admin']), (req, res) => {
+  try {
+    res.json(patientQueries.getAll());
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch patients' });
+  }
+});
+
+app.get('/api/patients/search', authenticate, authorize(['nurse', 'doctor', 'admin']), (req, res) => {
+  const q = req.query.q || '';
+  try {
+    res.json(patientQueries.search(q));
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to search patients' });
+  }
+});
+
+app.get('/api/patients/me', authenticate, (req, res) => {
+  if (req.user.role !== 'patient')
+    return res.status(403).json({ error: 'Only patients can access their own profile' });
+  try {
+    const profile = patientQueries.getByEmail(req.user.email);
+    res.json(profile || {});
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch profile' });
+  }
+});
+
+app.get('/api/patients/:id', authenticate, authorize(['nurse', 'doctor', 'admin']), (req, res) => {
+  try {
+    const patient = patientQueries.getById(parseInt(req.params.id));
+    if (!patient) return res.status(404).json({ error: 'Patient not found' });
+    const visits = patientQueries.getVisits(patient.id);
+    res.json({ ...patient, visits });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch patient' });
+  }
+});
+
+app.post('/api/patients', authenticate, authorize(['nurse', 'doctor', 'admin']), (req, res) => {
+  const { name, email, id_number, dob, gender, allergies } = req.body;
+  if (!name || !email) return res.status(400).json({ error: 'Name and email are required' });
+  try {
+    // Create a user account for the patient if none exists
+    let user = userQueries.getByEmail(email);
+    if (!user) {
+      user = userQueries.create({
+        email, password: 'patientpassword', role: 'patient', name,
+      });
+    }
+    const patient = patientQueries.create({ user_id: user.id, name, email, id_number, dob, gender, allergies });
+    res.status(201).json(patient);
+  } catch (err) {
+    console.error('Error creating patient:', err);
+    res.status(500).json({ error: 'Failed to create patient' });
+  }
+});
+
+app.put('/api/patients/:id', authenticate, authorize(['nurse', 'doctor', 'admin']), (req, res) => {
+  try {
+    const updated = patientQueries.update(parseInt(req.params.id), req.body);
+    if (!updated) return res.status(404).json({ error: 'Patient not found' });
+    res.json(updated);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to update patient' });
+  }
+});
+
+// Patient visits (their medical records)
+app.get('/api/patients/:id/visits', authenticate, (req, res) => {
+  try {
+    const visits = patientQueries.getVisits(parseInt(req.params.id));
+    res.json(visits);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch visits' });
+  }
+});
+
+// ── Inventory ─────────────────────────────────────────────────────────────────
+
 app.get('/api/inventory', authenticate, (req, res) => {
   try {
-    const inventory = inventoryQueries.getAll();
-    res.json(inventory);
+    res.json(inventoryQueries.getAll());
   } catch (err) {
-    console.error('Error fetching inventory:', err);
     res.status(500).json({ error: 'Failed to fetch inventory' });
   }
 });
 
-// Add new inventory item (requires nurse or admin role)
 app.post('/api/inventory', authenticate, authorize(['nurse', 'admin']), (req, res) => {
-  const { name, dosage, unit, quantity } = req.body;
-
-  console.log('Received inventory data:', { name, dosage, unit, quantity });
-
-  if (!name || quantity === undefined) {
-    return res.status(400).json({ error: 'Name and quantity are required' });
-  }
-
-  if (quantity < 0) {
-    return res.status(400).json({ error: 'Quantity must be positive' });
-  }
-
+  const { name, dosage, unit, quantity, type, size } = req.body;
+  if (!name || quantity === undefined) return res.status(400).json({ error: 'Name and quantity are required' });
+  if (quantity < 0) return res.status(400).json({ error: 'Quantity must be non-negative' });
   try {
-    const newItem = inventoryQueries.create({
-      name,
-      dosage: dosage || '',
-      unit: unit || 'mg',
-      quantity: parseInt(quantity),
-      price: 0 // Default price to 0 since it's not required
-    });
-    console.log('Created item:', newItem);
-    res.status(201).json(newItem);
+    res.status(201).json(inventoryQueries.create({
+      name, dosage: dosage || '', unit: unit || (type === 'Supply' ? 'pcs' : 'mg'),
+      quantity: parseInt(quantity), price: 0, type: type || 'Medicine', size: size || null,
+    }));
   } catch (err) {
-    console.error('Error creating inventory item:', err);
     res.status(500).json({ error: 'Failed to create inventory item' });
   }
 });
 
-// Update inventory item (requires nurse or admin role)
 app.put('/api/inventory/:id', authenticate, authorize(['nurse', 'admin']), (req, res) => {
   const id = parseInt(req.params.id);
-  const { name, dosage, unit, quantity } = req.body;
-
   try {
     const item = inventoryQueries.getById(id);
-    if (!item) {
-      return res.status(404).json({ error: 'Item not found' });
-    }
-
-    // Check if it's a full update or just quantity
-    if (name || dosage !== undefined || unit !== undefined) {
-      // Full update
-      const updatedItem = inventoryQueries.update(id, {
-        name: name || item.name,
-        dosage: dosage !== undefined ? dosage : item.dosage,
-        unit: unit !== undefined ? unit : (item.unit || 'mg'),
-        quantity: quantity !== undefined ? parseInt(quantity) : item.quantity,
-        price: item.price || 0 // Keep existing price or default to 0
-      });
-      res.json(updatedItem);
-    } else if (quantity !== undefined) {
-      // Quick quantity update
-      if (quantity < 0) {
-        return res.status(400).json({ error: 'Quantity must be positive' });
-      }
-      const updatedItem = inventoryQueries.update(id, { quantity: parseInt(quantity) });
-      res.json(updatedItem);
-    } else {
-      return res.status(400).json({ error: 'No fields to update' });
-    }
+    if (!item) return res.status(404).json({ error: 'Item not found' });
+    if (req.body.quantity !== undefined && req.body.quantity < 0)
+      return res.status(400).json({ error: 'Quantity must be non-negative' });
+    res.json(inventoryQueries.update(id, req.body));
   } catch (err) {
-    console.error('Error updating inventory item:', err);
     res.status(500).json({ error: 'Failed to update inventory item' });
   }
 });
 
-// Delete inventory item (requires nurse or admin role)
 app.delete('/api/inventory/:id', authenticate, authorize(['nurse', 'admin']), (req, res) => {
-  const id = parseInt(req.params.id);
-  
   try {
-    const result = inventoryQueries.delete(id);
-    if (result.changes === 0) {
-      return res.status(404).json({ error: 'Item not found' });
-    }
+    const result = inventoryQueries.delete(parseInt(req.params.id));
+    if (result.changes === 0) return res.status(404).json({ error: 'Item not found' });
     res.json({ message: 'Item deleted successfully' });
   } catch (err) {
-    console.error('Error deleting inventory item:', err);
     res.status(500).json({ error: 'Failed to delete inventory item' });
   }
 });
 
-// ============ MEDICAL RECORDS ENDPOINTS ============
+// ── Medical Records (visit-centric) ───────────────────────────────────────────
 
-// Get all medical records (requires authentication, patients see only their own)
-app.get('/api/medical-records', authenticate, authorizePatientRecords, (req, res) => {
+app.get('/api/medical-records', authenticate, (req, res) => {
   try {
     let records = medicalRecordQueries.getAll();
-
-    // If user is a patient, filter to show only their records
     if (req.user.role === 'patient') {
-      records = records.filter(record =>
-        record.email === req.user.email ||
-        record.patientName.toLowerCase().includes(req.user.name.toLowerCase())
+      records = records.filter(r =>
+        r.email === req.user.email ||
+        r.patientName.toLowerCase().includes(req.user.name.toLowerCase())
       );
     }
-
     res.json(records);
   } catch (err) {
-    console.error('Error fetching medical records:', err);
-    res.status(500).json({ error: 'Failed to fetch medical records' });
+    res.status(500).json({ error: 'Failed to fetch records' });
   }
 });
 
-// Create new medical record (requires doctor or nurse role)
-app.post('/api/medical-records', authenticate, authorize(['doctor', 'nurse']), (req, res) => {
+app.post('/api/medical-records', authenticate, authorize(['doctor', 'nurse', 'admin']), (req, res) => {
   const {
-    appointmentId, patientName, age, gender, email, idNumber, diagnosis, symptoms, treatment,
-    medications, allergies, bloodPressure, heartRate, temperature,
-    notes, followUpDate, labResults, xrayNotes, prescribedMedicines
+    patient_id, appointmentId, patientName, age, gender, email, idNumber,
+    diagnosis, symptoms, treatment, medications, allergies,
+    bloodPressure, heartRate, temperature, notes, followUpDate,
+    labResults, xrayNotes, prescribedMedicines,
   } = req.body;
 
-  if (!patientName || !diagnosis || !symptoms || !treatment) {
+  if (!patientName || !diagnosis || !symptoms || !treatment)
     return res.status(400).json({ error: 'Patient name, diagnosis, symptoms, and treatment are required' });
-  }
 
   try {
-    // Check for duplicate medical records
-    if (idNumber || email) {
-      const existingRecord = medicalRecordQueries.getByIdNumberOrEmail(idNumber, email);
-
-      if (existingRecord) {
-        // Return 409 Conflict with information about the existing record
-        return res.status(409).json({
-          error: 'Record exists for this patient',
-          existingRecordId: existingRecord.id,
-          message: 'A medical record already exists for this patient. Please edit the existing record instead of creating a new one.',
-          existingRecord: {
-            id: existingRecord.id,
-            patientName: existingRecord.patientName,
-            email: existingRecord.email,
-            idNumber: existingRecord.idNumber,
-            createdAt: existingRecord.createdAt,
-            diagnosis: existingRecord.diagnosis
-          }
-        });
-      }
-    }
-
     // Deduct prescribed medicines from inventory
-    const inventoryUpdates = [];
-    if (prescribedMedicines) {
-      let prescribedMedsArray = [];
-      try {
-        prescribedMedsArray = typeof prescribedMedicines === 'string'
-          ? JSON.parse(prescribedMedicines)
-          : prescribedMedicines;
-      } catch (err) {
-        console.error('Error parsing prescribedMedicines:', err);
-      }
+    const inventoryUpdates = deductPrescriptions(prescribedMedicines);
+    if (inventoryUpdates.error) return res.status(400).json({ error: inventoryUpdates.error });
 
-      for (const med of prescribedMedsArray) {
-        const inventoryItem = inventoryQueries.getById(med.id);
-        if (inventoryItem) {
-          const newQuantity = inventoryItem.quantity - (med.quantity || 1);
-          if (newQuantity < 0) {
-            const shortage = Math.abs(newQuantity);
-            return res.status(400).json({
-              error: `Insufficient stock for ${inventoryItem.name}. Currently available: ${inventoryItem.quantity} units. Prescription requires: ${med.quantity || 1} units. Short by: ${shortage} units. Please restock or reduce prescription quantity.`
-            });
-          }
-          inventoryQueries.update(med.id, { quantity: newQuantity });
-          inventoryUpdates.push({
-            medicineId: med.id,
-            medicineName: inventoryItem.name,
-            quantityDeducted: med.quantity || 1,
-            newStock: newQuantity
-          });
-        }
-      }
-    }
-
-    const newRecord = medicalRecordQueries.create({
-      appointmentId,
-      patientName,
-      age,
-      gender,
-      email: email || null,
-      idNumber: idNumber || null,
-      diagnosis,
-      symptoms,
-      treatment,
-      medications,
-      prescribedMedicines,
-      allergies,
-      bloodPressure,
-      heartRate,
-      temperature,
-      notes,
-      followUpDate,
-      labResults,
-      xrayNotes
+    const record = medicalRecordQueries.create({
+      patient_id: patient_id || null,
+      appointmentId, patientName, email, idNumber, age, gender,
+      symptoms, diagnosis, treatment, medications, prescribedMedicines,
+      allergies, bloodPressure, heartRate, temperature,
+      notes, followUpDate, labResults, xrayNotes,
     });
-
-    res.status(201).json({
-      record: newRecord,
-      inventoryUpdates: inventoryUpdates
-    });
+    res.status(201).json({ record, inventoryUpdates: inventoryUpdates.updates });
   } catch (err) {
-    console.error('Error creating medical record:', err);
-    res.status(500).json({ error: 'Failed to create medical record' });
+    console.error('Error creating record:', err);
+    res.status(500).json({ error: 'Failed to create record' });
   }
 });
 
-// Get medical record by ID (requires authentication)
-app.get('/api/medical-records/:id', authenticate, authorizePatientRecords, (req, res) => {
-  const id = parseInt(req.params.id);
-
+app.get('/api/medical-records/:id', authenticate, (req, res) => {
   try {
-    const record = medicalRecordQueries.getById(id);
-    if (!record) {
-      return res.status(404).json({ error: 'Medical record not found' });
-    }
-
-    // If user is a patient, check if they can access this record
-    if (req.user.role === 'patient') {
-      if (record.email !== req.user.email && !record.patientName.toLowerCase().includes(req.user.name.toLowerCase())) {
-        return res.status(403).json({ error: 'Access denied to this medical record' });
-      }
-    }
-
+    const record = medicalRecordQueries.getById(parseInt(req.params.id));
+    if (!record) return res.status(404).json({ error: 'Record not found' });
+    if (req.user.role === 'patient' &&
+        record.email !== req.user.email &&
+        !record.patientName.toLowerCase().includes(req.user.name.toLowerCase()))
+      return res.status(403).json({ error: 'Access denied' });
     res.json(record);
   } catch (err) {
-    console.error('Error fetching medical record:', err);
-    res.status(500).json({ error: 'Failed to fetch medical record' });
+    res.status(500).json({ error: 'Failed to fetch record' });
   }
 });
 
-// Update medical record (requires doctor or nurse role)
-app.put('/api/medical-records/:id', authenticate, authorize(['doctor', 'nurse']), (req, res) => {
+app.put('/api/medical-records/:id', authenticate, authorize(['doctor', 'nurse', 'admin']), (req, res) => {
   const id = parseInt(req.params.id);
-  const data = req.body;
-
   try {
-    const record = medicalRecordQueries.getById(id);
-    if (!record) {
-      return res.status(404).json({ error: 'Medical record not found' });
-    }
+    const existing = medicalRecordQueries.getById(id);
+    if (!existing) return res.status(404).json({ error: 'Record not found' });
 
-    // Handle inventory updates if prescribedMedicines changed
-    const inventoryUpdates = [];
-    if (data.prescribedMedicines) {
-      // Parse old and new prescribed medicines
-      let oldMeds = [];
-      let newMeds = [];
+    // Reconcile inventory on prescription change
+    const inventoryUpdates = reconcilePrescriptions(existing.prescribedMedicines, req.body.prescribedMedicines);
+    if (inventoryUpdates.error) return res.status(400).json({ error: inventoryUpdates.error });
 
-      try {
-        oldMeds = record.prescribedMedicines
-          ? (typeof record.prescribedMedicines === 'string'
-              ? JSON.parse(record.prescribedMedicines)
-              : record.prescribedMedicines)
-          : [];
-      } catch (err) {
-        console.error('Error parsing old prescribedMedicines:', err);
-      }
-
-      try {
-        newMeds = typeof data.prescribedMedicines === 'string'
-          ? JSON.parse(data.prescribedMedicines)
-          : data.prescribedMedicines;
-      } catch (err) {
-        console.error('Error parsing new prescribedMedicines:', err);
-      }
-
-      // Calculate the difference in quantities
-      const quantityChanges = new Map();
-
-      // Add back quantities from old prescriptions
-      oldMeds.forEach(med => {
-        const current = quantityChanges.get(med.id) || 0;
-        quantityChanges.set(med.id, current + (med.quantity || 1));
-      });
-
-      // Subtract quantities from new prescriptions
-      newMeds.forEach(med => {
-        const current = quantityChanges.get(med.id) || 0;
-        quantityChanges.set(med.id, current - (med.quantity || 1));
-      });
-
-      // Apply the changes to inventory
-      for (const [medId, quantityChange] of quantityChanges) {
-        if (quantityChange !== 0) {
-          const inventoryItem = inventoryQueries.getById(medId);
-          if (inventoryItem) {
-            const newQuantity = inventoryItem.quantity + quantityChange;
-            if (newQuantity < 0) {
-              const shortage = Math.abs(newQuantity);
-              const additionalNeeded = Math.abs(quantityChange);
-              return res.status(400).json({
-                error: `Insufficient stock for ${inventoryItem.name}. Currently available: ${inventoryItem.quantity} units. Additional units needed: ${additionalNeeded}. Short by: ${shortage} units. Please restock or reduce prescription quantity.`
-              });
-            }
-            inventoryQueries.update(medId, { quantity: newQuantity });
-            inventoryUpdates.push({
-              medicineId: medId,
-              medicineName: inventoryItem.name,
-              quantityChange: quantityChange,
-              newStock: newQuantity
-            });
-          }
-        }
-      }
-    }
-
-    // Include email and idNumber in the update data
-    const updatedData = {
-      ...data,
-      email: data.email || null,
-      idNumber: data.idNumber || null
-    };
-
-    const updatedRecord = medicalRecordQueries.update(id, updatedData);
-    res.json({
-      record: updatedRecord,
-      inventoryUpdates: inventoryUpdates
-    });
+    const record = medicalRecordQueries.update(id, req.body);
+    res.json({ record, inventoryUpdates: inventoryUpdates.updates });
   } catch (err) {
-    console.error('Error updating medical record:', err);
-    res.status(500).json({ error: 'Failed to update medical record' });
+    console.error('Error updating record:', err);
+    res.status(500).json({ error: 'Failed to update record' });
   }
 });
 
-// Delete medical record (requires nurse, doctor or admin role)
 app.delete('/api/medical-records/:id', authenticate, authorize(['nurse', 'doctor', 'admin']), (req, res) => {
-  const id = parseInt(req.params.id);
-  
   try {
-    const result = medicalRecordQueries.delete(id);
-    if (result.changes === 0) {
-      return res.status(404).json({ error: 'Medical record not found' });
-    }
-    res.json({ message: 'Medical record deleted successfully' });
+    const result = medicalRecordQueries.delete(parseInt(req.params.id));
+    if (result.changes === 0) return res.status(404).json({ error: 'Record not found' });
+    res.json({ message: 'Record deleted' });
   } catch (err) {
-    console.error('Error deleting medical record:', err);
-    res.status(500).json({ error: 'Failed to delete medical record' });
+    res.status(500).json({ error: 'Failed to delete record' });
   }
 });
 
-// Search medical records by patient name (requires authentication)
 app.get('/api/medical-records/search/:name', authenticate, authorize(['doctor', 'nurse', 'admin']), (req, res) => {
-  const name = req.params.name;
-
   try {
-    const records = medicalRecordQueries.getByPatientName(name);
-    res.json(records);
+    res.json(medicalRecordQueries.getByPatientName(req.params.name));
   } catch (err) {
-    console.error('Error searching medical records:', err);
-    res.status(500).json({ error: 'Failed to search medical records' });
+    res.status(500).json({ error: 'Failed to search records' });
   }
 });
 
-// Health check endpoint
+// ── Prescription helpers ──────────────────────────────────────────────────────
+
+const parseMeds = (val) => {
+  if (!val) return [];
+  if (Array.isArray(val)) return val;
+  try { return JSON.parse(val); } catch { return []; }
+};
+
+const deductPrescriptions = (prescribedMedicines) => {
+  const meds = parseMeds(prescribedMedicines);
+  const updates = [];
+  for (const med of meds) {
+    const item = inventoryQueries.getById(med.id);
+    if (!item) continue;
+    const newQty = item.quantity - (med.quantity || 1);
+    if (newQty < 0)
+      return { error: `Insufficient stock for ${item.name}. Available: ${item.quantity}, needed: ${med.quantity || 1}.` };
+    inventoryQueries.update(med.id, { quantity: newQty });
+    updates.push({ medicineId: med.id, medicineName: item.name, quantityDeducted: med.quantity || 1, newStock: newQty });
+  }
+  return { updates };
+};
+
+const reconcilePrescriptions = (oldRaw, newRaw) => {
+  const oldMeds = parseMeds(oldRaw);
+  const newMeds = parseMeds(newRaw);
+  const changes = new Map();
+
+  oldMeds.forEach(m => changes.set(m.id, (changes.get(m.id) || 0) + (m.quantity || 1)));  // restore old
+  newMeds.forEach(m => changes.set(m.id, (changes.get(m.id) || 0) - (m.quantity || 1)));  // deduct new
+
+  const updates = [];
+  for (const [medId, delta] of changes) {
+    if (delta === 0) continue;
+    const item = inventoryQueries.getById(medId);
+    if (!item) continue;
+    const newQty = item.quantity + delta;
+    if (newQty < 0)
+      return { error: `Insufficient stock for ${item.name}. Available: ${item.quantity}.` };
+    inventoryQueries.update(medId, { quantity: newQty });
+    updates.push({ medicineId: medId, medicineName: item.name, quantityChange: delta, newStock: newQty });
+  }
+  return { updates };
+};
+
+// ── Notifications ─────────────────────────────────────────────────────────────
+
+// Get unread notifications for the current user (staff only)
+app.get('/api/notifications', authenticate, authorize(['nurse', 'doctor', 'admin']), (req, res) => {
+  try {
+    const notifications = notificationQueries.getUnreadForUser(req.user.id);
+    const count = notificationQueries.getUnreadCountForUser(req.user.id);
+    res.json({ notifications, count });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch notifications' });
+  }
+});
+
+// Mark all notifications as read for the current user
+app.put('/api/notifications/read', authenticate, authorize(['nurse', 'doctor', 'admin']), (req, res) => {
+  try {
+    notificationQueries.markAllReadForUser(req.user.id);
+    res.json({ message: 'Notifications marked as read' });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to mark notifications' });
+  }
+});
+
+// ── Health check ──────────────────────────────────────────────────────────────
+
 app.get('/api/health', (req, res) => {
-  try {
-    const appointments = appointmentQueries.getAll();
-    const inventory = inventoryQueries.getAll();
-    const medicalRecords = medicalRecordQueries.getAll();
-    
-    res.json({ 
-      status: 'OK', 
-      timestamp: new Date().toISOString(),
-      database: 'SQLite',
-      appointments: appointments.length,
-      inventory: inventory.length,
-      medicalRecords: medicalRecords.length
-    });
-  } catch (err) {
-    res.status(500).json({ status: 'ERROR', error: err.message });
-  }
+  res.json({ status: 'OK', timestamp: new Date().toISOString() });
 });
 
-// Start server
 app.listen(PORT, () => {
   console.log(`🚀 Server running on http://localhost:${PORT}`);
-  console.log(`📅 Appointments API: http://localhost:${PORT}/api/appointments`);
-  console.log(`📦 Inventory API: http://localhost:${PORT}/api/inventory`);
-  console.log(`🏥 Medical Records API: http://localhost:${PORT}/api/medical-records`);
-  console.log(`💾 Database: SQLite (medical-practice.db)`);
 });
